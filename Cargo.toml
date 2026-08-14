@@ -1,0 +1,48 @@
+[workspace]
+resolver = "2"
+# "programs/*" is added in T012 together with the program itself: cargo treats
+# a glob that matched no crate as an error, so an empty directory does not help here.
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+repository = "https://github.com/PropAMMForge/PropAMM-Forge"
+
+# The versions here are the single source of truth for the whole workspace.
+#
+# jupiter-amm-interface asks for solana crates as ">=2", i.e. with no upper bound.
+# Anchor 1.2.0 asks for "^3.0.0"…"^3.1.0". The ranges are compatible, cargo resolves
+# them to one triple — there is no conflict. The danger is the open range itself: a
+# third party's minor release arrives on its own and stops the build with an error
+# inside a foreign crate. So Cargo.lock is committed and is the pin, and bumping the
+# solana crates is a deliberate act with a test re-run, not a side effect of `cargo update`.
+[workspace.dependencies]
+anchor-lang = "1.2.0"
+anchor-spl = "1.2.0"
+jupiter-amm-interface = "0.6.1"
+spl-token-2022 = "11.0.0"
+
+mollusk-svm = "0.15.1"
+mollusk-svm-bencher = "0.15.1"
+mollusk-svm-programs-token = "0.15.1"
+proptest = "1.11"
+
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "time", "signal"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+
+# Tests and CU benchmarks must be close to the release build in arithmetic,
+# otherwise the measured numbers do not carry over to what really goes to the network.
+[profile.test]
+overflow-checks = true

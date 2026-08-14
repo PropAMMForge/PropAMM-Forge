@@ -1,0 +1,26 @@
+[toolchain]
+anchor_version = "1.2.0"
+solana_version = "3.1.10"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+propamm_vault = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS" # Anchor placeholder, replaced in T012
+
+[programs.devnet]
+propamm_vault = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS" # Anchor placeholder, replaced in T012
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "Localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "cargo test --workspace"
+
+[test.validator]
+url = "https://api.devnet.solana.com"

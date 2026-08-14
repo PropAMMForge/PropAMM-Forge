@@ -1,0 +1,17 @@
+[package]
+name = "propamm-quote"
+description = "Quote math: the single source of truth for the program, the adapter and the engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# There are no Solana dependencies here and there must be none.
+#
+# This crate builds for BPF (inside the program), for the host (adapter, engine)
+# and in tests — from the same code. That is what makes SC-006 a property of the
+# construction: the router and the chain cannot diverge, because they compute with the same code.
+[dependencies]
+
+[dev-dependencies]
+proptest.workspace = true

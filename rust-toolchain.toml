@@ -1,0 +1,9 @@
+# Pin of the HOST toolchain: off-chain crates, tests, clippy.
+#
+# It does not describe the BPF build: cargo-build-sbf 3.1.10 carries its own rustc 1.89.0
+# inside platform-tools v1.52 and switches RUSTUP_TOOLCHAIN itself. If `anchor build`
+# ever starts failing on a channel mismatch — the cause is here, not in the code.
+[toolchain]
+channel = "1.97.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
