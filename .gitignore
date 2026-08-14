@@ -1,0 +1,37 @@
+# The project's working documents do not go into the repository.
+# A consequence to keep in mind: a fresh clone arrives without docs/ and without
+# CLAUDE.md, i.e. a new session starts without state. The backup lives outside git.
+*.md
+!README.md
+
+
+# The UI generator export: carries its own package.json and a .env with a live key
+noah-export/
+
+# Node
+node_modules/
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+.vite/
+
+# Rust / Anchor
+target/
+.anchor/
+test-ledger/
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+keys/
+*-keypair.json
+
+# Developer environment
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log

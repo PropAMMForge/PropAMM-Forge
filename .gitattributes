@@ -1,0 +1,25 @@
+# Line endings are normalized to LF on commit.
+# This has to exist BEFORE the first commit: otherwise CRLF creeps into the scripts,
+# and the build in WSL fails with a message that points nowhere near the real cause.
+* text=auto eol=lf
+
+# These types break under CRLF unconditionally — pinned explicitly.
+*.sh   text eol=lf
+*.rs   text eol=lf
+*.toml text eol=lf
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+
+# Binary — do not touch
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.so   binary
+*.wasm binary
+
+# Lock files do not bloat the diff in review
+pnpm-lock.yaml -diff
+Cargo.lock     -diff
