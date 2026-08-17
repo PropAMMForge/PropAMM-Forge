@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust — clippy + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The version comes from rust-toolchain.toml and is not duplicated here: two
+      # sources of truth diverge silently, and the divergence shows up at build time.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace
+
+      # Cargo.lock is the pin of the open ">=2" ranges from jupiter-amm-interface.
+      # If the build changes it, the dependencies moved on their own, and that has
+      # to be known here, not on devnet.
+      - name: Lock file unchanged
+        run: git diff --exit-code Cargo.lock
+
+  node:
+    name: Node — lint + typecheck + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Tests
+        run: pnpm test
+
+  secrets:
+    name: Secrets and traces
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The repository is public. Both checks are cheap and catch what after a push
+      # can be fixed only by rewriting history.
+      - name: No private keys in the index
+        run: |
+          if git grep -nE 'BEGIN (RSA|OPENSSH|EC|PGP) PRIVATE KEY' -- . ; then
+            echo "::error::a private key was found in the repository"
+            exit 1
+          fi
+          echo "no keys found"
+
+      - name: .env is not tracked
+        run: |
+          if git ls-files --error-unmatch .env 2>/dev/null; then
+            echo "::error::.env ended up in git"
+            exit 1
+          fi
+          echo ".env is outside the index"

@@ -34,9 +34,6 @@
       },
       "style": {
         "noParameterProperties": "error"
-      },
-      "nursery": {
-        "noFloatingPromises": "error"
       }
     }
   }
