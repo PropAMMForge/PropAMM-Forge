@@ -7,10 +7,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-propamm_vault = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS" # Anchor placeholder, replaced in T012
+propamm_vault = "77Y9n3vWE2noN1u9PTshuWxdDRsrw9UMtejBypUD9wjq"
 
 [programs.devnet]
-propamm_vault = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS" # Anchor placeholder, replaced in T012
+propamm_vault = "77Y9n3vWE2noN1u9PTshuWxdDRsrw9UMtejBypUD9wjq"
 
 [registry]
 url = "https://api.apr.dev"

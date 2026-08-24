@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
-# "programs/*" is added in T012 together with the program itself: cargo treats
-# a glob that matched no crate as an error, so an empty directory does not help here.
-members = ["crates/*"]
+# One workspace for the on-chain and off-chain parts. Only programs/propamm-vault
+# is built for BPF; the rest are host crates, cargo-build-sbf does not touch them.
+members = ["crates/*", "programs/*"]
 
 [workspace.package]
 version = "0.1.0"
