@@ -22,7 +22,12 @@ repository = "https://github.com/PropAMMForge/PropAMM-Forge"
 anchor-lang = "1.2.0"
 anchor-spl = "1.2.0"
 jupiter-amm-interface = "0.6.1"
-spl-token-2022 = "11.0.0"
+
+# `spl-token-2022` is NO LONGER NEEDED here and must not be added: anchor-spl
+# 1.2.0 works through `spl-token-2022-interface` and re-exports it as
+# `anchor_spl::token_2022::spl_token_2022`. Two crates at once would give two
+# incompatible sets of `ExtensionType`, and the FR-005 check would compare against
+# something other than what the token program sees. T013 decision, replacing the pin from PLAN.md.
 
 mollusk-svm = "0.15.1"
 mollusk-svm-bencher = "0.15.1"
