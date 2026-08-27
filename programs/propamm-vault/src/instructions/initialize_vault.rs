@@ -26,9 +26,9 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
-use propamm_quote::BPS_DENOM;
 
 use crate::errors::VaultError;
+use crate::instructions::authority::RiskLimits;
 use crate::mint_guard::{ensure_transfer_is_faithful, MintRole};
 use crate::state::{Vault, VAULT_SEED};
 
@@ -70,15 +70,20 @@ impl InitializeVaultArgs {
             Pubkey::default(),
             VaultError::InvalidAuthority
         );
-        require!(self.max_size_base > 0, VaultError::InvalidRiskLimits);
-        require!(self.max_quote_age_slots > 0, VaultError::InvalidRiskLimits);
-        // Skew never exceeds 100% by construction of `inventory_skew_bps`,
-        // so a bound above 10 000 bps limits nothing and merely looks like a bound.
-        require!(
-            self.max_skew_bps <= BPS_DENOM,
-            VaultError::InvalidRiskLimits
-        );
-        Ok(())
+        // The limits are validated by the same type `set_risk_limits` accepts (T015):
+        // separate checks would diverge, and a risk limit would depend on which
+        // road it was set by.
+        self.risk_limits().validate()
+    }
+
+    /// Risk limits from these arguments.
+    #[must_use]
+    pub fn risk_limits(&self) -> RiskLimits {
+        RiskLimits {
+            max_size_base: self.max_size_base,
+            max_quote_age_slots: self.max_quote_age_slots,
+            max_skew_bps: self.max_skew_bps,
+        }
     }
 }
 
@@ -203,6 +208,7 @@ pub fn handle_initialize_vault(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use propamm_quote::BPS_DENOM;
 
     fn sane() -> InitializeVaultArgs {
         InitializeVaultArgs {
@@ -252,6 +258,20 @@ mod tests {
         let mut a = sane();
         a.max_skew_bps = BPS_DENOM;
         assert!(a.validate().is_ok());
+    }
+
+    /// Deployment and `set_risk_limits` must refuse the same thing. If the checks
+    /// lived separately, a risk limit would depend on which road it was set by.
+    #[test]
+    fn both_paths_reject_the_same_limits() {
+        let mut a = sane();
+        a.max_skew_bps = BPS_DENOM + 1;
+        assert!(a.validate().is_err());
+        assert!(a.risk_limits().validate().is_err());
+
+        let good = sane();
+        assert!(good.validate().is_ok());
+        assert!(good.risk_limits().validate().is_ok());
     }
 
     /// Argument encoding round-trip. The Anchor coder writes a missing field as zero

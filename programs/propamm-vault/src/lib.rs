@@ -4,11 +4,10 @@
 //! # What is here now
 //!
 //! State layout ([`state::Vault`]), asset screening per FR-005
-//! ([`mint_guard`]), deployment (`initialize_vault`) and capital movement
-//! (`deposit` / `withdraw`).
+//! ([`mint_guard`]), deployment (`initialize_vault`), capital movement
+//! (`deposit` / `withdraw`) and administration (`set_*`).
 //!
-//! Next: `set_pricing_authority` / `set_risk_limits` (T015), `update_quote`
-//! (T016), `swap` (T017), `halt` / `resume` (T052).
+//! Next: `update_quote` (T016), `swap` (T017), `halt` / `resume` (T052).
 //!
 //! # Where the math lives
 //!
@@ -47,6 +46,22 @@ pub mod propamm_vault {
         args: InitializeVaultArgs,
     ) -> Result<()> {
         instructions::initialize_vault::handle_initialize_vault(ctx, args)
+    }
+
+    /// Replace the quote signer (FR-010). Clears the current quote:
+    /// replacement means the previous price source is no longer trusted.
+    pub fn set_pricing_authority(ctx: Context<AdminOnly>, new_authority: Pubkey) -> Result<()> {
+        instructions::authority::handle_set_pricing_authority(ctx, new_authority)
+    }
+
+    /// Replace the emergency-halt signer (FR-024, FR-023c).
+    pub fn set_halt_authority(ctx: Context<AdminOnly>, new_authority: Pubkey) -> Result<()> {
+        instructions::authority::handle_set_halt_authority(ctx, new_authority)
+    }
+
+    /// Change the risk limits (FR-007, FR-008, FR-026).
+    pub fn set_risk_limits(ctx: Context<AdminOnly>, limits: RiskLimits) -> Result<()> {
+        instructions::authority::handle_set_risk_limits(ctx, limits)
     }
 
     /// Treasury deposit by the owner (FR-003).
