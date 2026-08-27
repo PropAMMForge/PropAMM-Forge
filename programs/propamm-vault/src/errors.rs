@@ -8,7 +8,11 @@
 
 use anchor_lang::prelude::*;
 
+// `PartialEq` here is not cosmetic: without it, pure checks such as
+// `resolve_side` would have to be compared via `matches!`, i.e. with no
+// difference between "the wrong error code" and "the right one".
 #[error_code]
+#[derive(PartialEq, Eq)]
 pub enum VaultError {
     #[msg("base and quote mints must differ")]
     IdenticalMints,
@@ -21,6 +25,21 @@ pub enum VaultError {
 
     #[msg("risk limits are outside their domain")]
     InvalidRiskLimits,
+
+    #[msg("only the vault owner may move capital")]
+    OwnerOnly,
+
+    #[msg("mint is not part of this vault's pair")]
+    UnknownMint,
+
+    #[msg("treasury account does not belong to this vault side")]
+    TreasuryAccountMismatch,
+
+    #[msg("amount must be greater than zero")]
+    ZeroAmount,
+
+    #[msg("vault does not hold that much of the asset")]
+    InsufficientVaultBalance,
 
     // --- FR-005: extensions able to make received ≠ sent ---
     //

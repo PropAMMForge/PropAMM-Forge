@@ -154,7 +154,10 @@ pub struct InitializeVault<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<InitializeVault>, args: InitializeVaultArgs) -> Result<()> {
+pub fn handle_initialize_vault(
+    ctx: Context<InitializeVault>,
+    args: InitializeVaultArgs,
+) -> Result<()> {
     args.validate()?;
 
     // FR-005 — before writing state: the pair is fixed forever, and an asset whose
