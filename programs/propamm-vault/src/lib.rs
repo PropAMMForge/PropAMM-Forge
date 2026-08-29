@@ -5,9 +5,10 @@
 //!
 //! State layout ([`state::Vault`]), asset screening per FR-005
 //! ([`mint_guard`]), deployment (`initialize_vault`), capital movement
-//! (`deposit` / `withdraw`) and administration (`set_*`).
+//! (`deposit` / `withdraw`), administration (`set_*`) and quoting
+//! (`update_quote` / `clear_quote`).
 //!
-//! Next: `update_quote` (T016), `swap` (T017), `halt` / `resume` (T052).
+//! Next: `swap` (T017), `halt` / `resume` (T052).
 //!
 //! # Where the math lives
 //!
@@ -62,6 +63,18 @@ pub mod propamm_vault {
     /// Change the risk limits (FR-007, FR-008, FR-026).
     pub fn set_risk_limits(ctx: Context<AdminOnly>, limits: RiskLimits) -> Result<()> {
         instructions::authority::handle_set_risk_limits(ctx, limits)
+    }
+
+    /// Post a quote (FR-006, FR-007). Signed by `pricing_authority`;
+    /// `quote_slot` is taken from the chain, not from the arguments.
+    pub fn update_quote(ctx: Context<Quoting>, quote: QuoteUpdate) -> Result<()> {
+        instructions::update_quote::handle_update_quote(ctx, quote)
+    }
+
+    /// Clear the quote (FR-014) — the feed went silent, and repeating the last
+    /// known price is worse than not quoting at all.
+    pub fn clear_quote(ctx: Context<Quoting>) -> Result<()> {
+        instructions::update_quote::handle_clear_quote(ctx)
     }
 
     /// Treasury deposit by the owner (FR-003).

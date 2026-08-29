@@ -29,6 +29,15 @@ pub enum VaultError {
     #[msg("only the vault owner may move capital")]
     OwnerOnly,
 
+    #[msg("only the pricing authority may quote")]
+    PricingAuthorityOnly,
+
+    #[msg("quote parameters are outside the domain the math accepts")]
+    InvalidQuote,
+
+    #[msg("vault is halted")]
+    VaultHalted,
+
     #[msg("mint is not part of this vault's pair")]
     UnknownMint,
 

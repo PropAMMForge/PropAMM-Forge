@@ -22,15 +22,21 @@ use anchor_lang::prelude::*;
 use crate::errors::VaultError;
 use crate::state::{Vault, VAULT_SEED};
 
-/// The risk limits — the only place they are validated.
+/// The owner's risk limits — what the engine cannot change.
+///
+/// `max_size_base` is **not** here: under FR-006 and FR-008 the maximum size is
+/// carried by the quote, so it is written by `pricing_authority` in `update_quote` (T016).
+/// A size ceiling from the owner would save nothing: a key that can post any
+/// price is not restrained by a size limit — it is restrained by `max_skew_bps`,
+/// and that is right here.
+///
+/// This is the only place the limits are validated.
 ///
 /// The same type is used by `initialize_vault`: if the checks lived separately,
 /// `set_risk_limits` would let through what deployment refused, and a risk
 /// limit would depend on which road it was set by.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RiskLimits {
-    /// Maximum order size in the base asset (FR-008).
-    pub max_size_base: u64,
     /// Quote freshness limit in slots (FR-007).
     pub max_quote_age_slots: u32,
     /// Hard bound on inventory skew in basis points (FR-026).
@@ -39,7 +45,6 @@ pub struct RiskLimits {
 
 impl RiskLimits {
     pub fn validate(&self) -> Result<()> {
-        require!(self.max_size_base > 0, VaultError::InvalidRiskLimits);
         require!(self.max_quote_age_slots > 0, VaultError::InvalidRiskLimits);
         // Skew never exceeds 100% by construction of `inventory_skew_bps`,
         // so a bound above 10 000 bps limits nothing and merely looks like a bound.
@@ -81,11 +86,7 @@ pub fn handle_set_pricing_authority(ctx: Context<AdminOnly>, new_authority: Pubk
 
     let vault = &mut ctx.accounts.vault;
     vault.pricing_authority = new_authority;
-
-    vault.mid_e9 = 0;
-    vault.spread_bps = 0;
-    vault.skew_bps = 0;
-    vault.quote_slot = 0;
+    vault.clear_quote();
 
     Ok(())
 }
@@ -105,7 +106,7 @@ pub fn handle_set_halt_authority(ctx: Context<AdminOnly>, new_authority: Pubkey)
     Ok(())
 }
 
-/// Change the risk limits (FR-008, FR-007, FR-026).
+/// Change the risk limits (FR-007, FR-026).
 ///
 /// Narrowing the skew bound below the current state is **allowed** and does not
 /// lock the vault: the bound limits swaps, not state (Phase 1 decision), so a
@@ -114,7 +115,6 @@ pub fn handle_set_risk_limits(ctx: Context<AdminOnly>, limits: RiskLimits) -> Re
     limits.validate()?;
 
     let vault = &mut ctx.accounts.vault;
-    vault.max_size_base = limits.max_size_base;
     vault.max_quote_age_slots = limits.max_quote_age_slots;
     vault.max_skew_bps = limits.max_skew_bps;
 
@@ -127,7 +127,6 @@ mod tests {
 
     fn sane() -> RiskLimits {
         RiskLimits {
-            max_size_base: 1_000_000,
             max_quote_age_slots: 25,
             max_skew_bps: 3_000,
         }
@@ -140,10 +139,6 @@ mod tests {
 
     #[test]
     fn limits_that_do_not_limit_are_rejected() {
-        let mut l = sane();
-        l.max_size_base = 0;
-        assert!(l.validate().is_err());
-
         let mut l = sane();
         l.max_quote_age_slots = 0;
         assert!(l.validate().is_err());
@@ -165,7 +160,7 @@ mod tests {
         let l = sane();
         let mut bytes = Vec::new();
         l.serialize(&mut bytes).unwrap();
-        assert_eq!(bytes.len(), 8 + 4 + 2);
+        assert_eq!(bytes.len(), 4 + 2);
         assert_eq!(RiskLimits::deserialize(&mut bytes.as_slice()).unwrap(), l);
     }
 }

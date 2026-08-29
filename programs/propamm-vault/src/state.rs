@@ -93,6 +93,20 @@ impl Vault {
     /// Account size including the discriminator — what goes into `space` on `init`.
     pub const SPACE: usize = 8 + Self::INIT_SPACE;
 
+    /// Remove the quote — the "no price" state, the same as after deployment.
+    ///
+    /// There are already three places the quote disappears from: capital withdrawal
+    /// (T014), replacement of the quote signer (T015) and explicit clearing by the
+    /// engine (T016). Three copies of this assignment would diverge on the first new
+    /// quote field — that is exactly how `max_size_base` almost outlived the price.
+    pub fn clear_quote(&mut self) {
+        self.mid_e9 = 0;
+        self.spread_bps = 0;
+        self.skew_bps = 0;
+        self.max_size_base = 0;
+        self.quote_slot = 0;
+    }
+
     /// Vault PDA seeds: `(owner, base_mint, quote_mint)`.
     ///
     /// The pair is part of the address, so one owner deploys several vaults from
@@ -195,6 +209,24 @@ mod tests {
         assert_eq!(back.skew_bps, sentinel().skew_bps);
         assert!(back.halted);
         assert_eq!(back.bump, 254);
+    }
+
+    /// Clearing must remove **all** quote fields, not the ones someone remembered.
+    #[test]
+    fn clearing_a_quote_leaves_no_quote_field_behind() {
+        let mut v = sentinel();
+        v.clear_quote();
+
+        assert_eq!(v.mid_e9, 0);
+        assert_eq!(v.spread_bps, 0);
+        assert_eq!(v.skew_bps, 0);
+        assert_eq!(v.max_size_base, 0);
+        assert_eq!(v.quote_slot, 0);
+
+        // Risk limits and authorities are untouched by clearing.
+        assert_eq!(v.max_quote_age_slots, 13);
+        assert_eq!(v.max_skew_bps, 16);
+        assert_eq!(v.pricing_authority, sentinel().pricing_authority);
     }
 
     #[test]

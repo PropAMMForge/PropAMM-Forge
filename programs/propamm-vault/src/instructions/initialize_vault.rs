@@ -44,8 +44,6 @@ pub struct InitializeVaultArgs {
     pub pricing_authority: Pubkey,
     /// The right to halt in an emergency (FR-024, FR-023c) — separate from capital.
     pub halt_authority: Pubkey,
-    /// Maximum order size in the base asset (FR-008).
-    pub max_size_base: u64,
     /// Quote freshness limit in slots (FR-007).
     pub max_quote_age_slots: u32,
     /// Hard bound on inventory skew in basis points (FR-026).
@@ -80,7 +78,6 @@ impl InitializeVaultArgs {
     #[must_use]
     pub fn risk_limits(&self) -> RiskLimits {
         RiskLimits {
-            max_size_base: self.max_size_base,
             max_quote_age_slots: self.max_quote_age_slots,
             max_skew_bps: self.max_skew_bps,
         }
@@ -190,12 +187,8 @@ pub fn handle_initialize_vault(
 
     // There is no quote yet — and that is not "a price of zero" but `QuoteNotSet` in the math.
     // Swaps are impossible before `update_quote` even with a full treasury.
-    vault.mid_e9 = 0;
-    vault.spread_bps = 0;
-    vault.skew_bps = 0;
-    vault.quote_slot = 0;
+    vault.clear_quote();
 
-    vault.max_size_base = args.max_size_base;
     vault.max_quote_age_slots = args.max_quote_age_slots;
     vault.max_skew_bps = args.max_skew_bps;
 
@@ -214,7 +207,6 @@ mod tests {
         InitializeVaultArgs {
             pricing_authority: Pubkey::new_from_array([2; 32]),
             halt_authority: Pubkey::new_from_array([3; 32]),
-            max_size_base: 1_000_000,
             max_quote_age_slots: 25,
             max_skew_bps: 3_000,
         }
@@ -238,10 +230,6 @@ mod tests {
 
     #[test]
     fn limits_that_do_not_limit_are_rejected() {
-        let mut a = sane();
-        a.max_size_base = 0;
-        assert!(a.validate().is_err(), "zero order size");
-
         let mut a = sane();
         a.max_quote_age_slots = 0;
         assert!(a.validate().is_err(), "zero freshness limit");
@@ -283,7 +271,7 @@ mod tests {
         let a = sane();
         let mut bytes = Vec::new();
         a.serialize(&mut bytes).unwrap();
-        assert_eq!(bytes.len(), 32 + 32 + 8 + 4 + 2);
+        assert_eq!(bytes.len(), 32 + 32 + 4 + 2);
 
         let back = InitializeVaultArgs::deserialize(&mut bytes.as_slice()).unwrap();
         assert_eq!(back, a);

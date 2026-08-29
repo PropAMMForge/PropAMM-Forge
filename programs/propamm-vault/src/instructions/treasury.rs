@@ -177,11 +177,7 @@ pub fn handle_withdraw(ctx: Context<MoveCapital>, amount: u64) -> Result<()> {
     // The quote is cleared entirely, back to "as after deployment": a partial clear
     // (say, only `mid_e9`) would leave a spread and a skew from a price that is gone,
     // and the next reader of the state could not tell them from current ones.
-    let vault = &mut ctx.accounts.vault;
-    vault.mid_e9 = 0;
-    vault.spread_bps = 0;
-    vault.skew_bps = 0;
-    vault.quote_slot = 0;
+    ctx.accounts.vault.clear_quote();
 
     Ok(())
 }
