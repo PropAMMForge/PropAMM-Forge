@@ -6,9 +6,9 @@
 //! State layout ([`state::Vault`]), asset screening per FR-005
 //! ([`mint_guard`]), deployment (`initialize_vault`), capital movement
 //! (`deposit` / `withdraw`), administration (`set_*`) and quoting
-//! (`update_quote` / `clear_quote`).
+//! (`update_quote` / `clear_quote`) and the swap itself (`swap`).
 //!
-//! Next: `swap` (T017), `halt` / `resume` (T052).
+//! Next: `halt` / `resume` (T052).
 //!
 //! # Where the math lives
 //!
@@ -75,6 +75,13 @@ pub mod propamm_vault {
     /// known price is worse than not quoting at all.
     pub fn clear_quote(ctx: Context<Quoting>) -> Result<()> {
         instructions::update_quote::handle_clear_quote(ctx)
+    }
+
+    /// Swap at the posted quote (FR-007, FR-008, FR-009, FR-026).
+    /// Four guards are computed by `propamm_quote`; the program adds `halted`
+    /// and the check of the accounts against the state.
+    pub fn swap(ctx: Context<Swap>, args: SwapArgs) -> Result<()> {
+        instructions::swap::handle_swap(ctx, args)
     }
 
     /// Treasury deposit by the owner (FR-003).

@@ -3,10 +3,12 @@
 
 pub mod authority;
 pub mod initialize_vault;
+pub mod swap;
 pub mod treasury;
 pub mod update_quote;
 
 pub use authority::*;
 pub use initialize_vault::*;
+pub use swap::*;
 pub use treasury::*;
 pub use update_quote::*;

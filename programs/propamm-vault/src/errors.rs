@@ -50,6 +50,39 @@ pub enum VaultError {
     #[msg("vault does not hold that much of the asset")]
     InsufficientVaultBalance,
 
+    // --- Swap guards: a mirror of `propamm_quote::QuoteError` ---
+    //
+    // Every crate variant has its own code here so that the CLI, the console and
+    // the adapter can tell "the venue is not quoting" from "the order is too large"
+    // without parsing text. The mapping is `From<QuoteError>` below — a single
+    // `match` the compiler forces to be updated as soon as the crate gains a variant.
+    #[msg("quote is not set")]
+    QuoteNotSet,
+
+    #[msg("quote is older than the freshness limit")]
+    QuoteStale,
+
+    #[msg("base leg exceeds the maximum quoted size")]
+    SizeExceeded,
+
+    #[msg("result is worse than the declared limit")]
+    SlippageExceeded,
+
+    #[msg("swap would push inventory past the hard bound")]
+    InventoryBound,
+
+    #[msg("vault cannot pay out that amount")]
+    InsufficientLiquidity,
+
+    #[msg("amount rounds to zero")]
+    AmountTooSmall,
+
+    #[msg("intermediate value overflowed")]
+    MathOverflow,
+
+    #[msg("account does not match the one recorded in the vault")]
+    AccountMismatch,
+
     // --- FR-005: extensions able to make received ≠ sent ---
     //
     // Separate codes rather than one shared code, so that the CLI and the console
@@ -76,4 +109,26 @@ pub enum VaultError {
 
     #[msg("mint carries an extension that is not on the allow list")]
     MintExtensionNotAllowed,
+}
+
+/// Mapping of math errors onto program codes.
+///
+/// Written as a `match` without a `_` arm: when `propamm_quote` gains a new
+/// variant, the compiler stops right here — instead of silently handing the
+/// swap "some error".
+impl From<propamm_quote::QuoteError> for VaultError {
+    fn from(err: propamm_quote::QuoteError) -> Self {
+        use propamm_quote::QuoteError as Q;
+        match err {
+            Q::QuoteNotSet => Self::QuoteNotSet,
+            Q::InvalidParams => Self::InvalidQuote,
+            Q::QuoteStale => Self::QuoteStale,
+            Q::SizeExceeded => Self::SizeExceeded,
+            Q::SlippageExceeded => Self::SlippageExceeded,
+            Q::InventoryBound => Self::InventoryBound,
+            Q::InsufficientLiquidity => Self::InsufficientLiquidity,
+            Q::AmountTooSmall => Self::AmountTooSmall,
+            Q::Overflow => Self::MathOverflow,
+        }
+    }
 }
