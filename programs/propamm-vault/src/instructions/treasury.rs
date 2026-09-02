@@ -29,10 +29,15 @@ use anchor_spl::token_interface::{
 };
 
 use crate::errors::VaultError;
+use crate::events::{CapitalFlow, CapitalMoved, QuoteClearReason, QuoteCleared};
 use crate::state::{Vault, VAULT_SEED};
 
 /// Side of the treasury, derived from the mint passed in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// Serializable because it goes into the event [`crate::events::CapitalMoved`]:
+/// there it says which side of the inventory changed, and does so in one byte
+/// instead of a thirty-two-byte mint.
+#[derive(AnchorSerialize, AnchorDeserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TreasurySide {
     Base,
     Quote,
@@ -107,11 +112,22 @@ pub struct MoveCapital<'info> {
 /// Treasury deposit by the owner (FR-003).
 pub fn handle_deposit(ctx: Context<MoveCapital>, amount: u64) -> Result<()> {
     require!(amount > 0, VaultError::ZeroAmount);
-    resolve_side(
+    let side = resolve_side(
         &ctx.accounts.vault,
         &ctx.accounts.mint.key(),
         &ctx.accounts.treasury.key(),
     )?;
+    // The balance after the transfer is computed, not re-read: `InterfaceAccount`
+    // holds a copy taken on entry to the instruction, which is stale after the CPI,
+    // and `reload()` is one more account read. The arithmetic is exact precisely
+    // because `mint_guard` does not let `TransferFeeConfig` in: what was sent is
+    // what arrived.
+    let treasury_amount_after = ctx
+        .accounts
+        .treasury
+        .amount
+        .checked_add(amount)
+        .ok_or(VaultError::MathOverflow)?;
 
     // `transfer_checked`, not `transfer`: under Token-2022 plain `transfer` is
     // deprecated, and checking the mint and decimals is exactly what makes
@@ -128,13 +144,24 @@ pub fn handle_deposit(ctx: Context<MoveCapital>, amount: u64) -> Result<()> {
         ),
         amount,
         ctx.accounts.mint.decimals,
-    )
+    )?;
+
+    emit!(CapitalMoved {
+        vault: ctx.accounts.vault.key(),
+        slot: Clock::get()?.slot,
+        flow: CapitalFlow::Deposit,
+        side,
+        amount,
+        treasury_amount_after,
+    });
+
+    Ok(())
 }
 
 /// Capital withdrawal by the owner (FR-003). Clears the current quote.
 pub fn handle_withdraw(ctx: Context<MoveCapital>, amount: u64) -> Result<()> {
     require!(amount > 0, VaultError::ZeroAmount);
-    resolve_side(
+    let side = resolve_side(
         &ctx.accounts.vault,
         &ctx.accounts.mint.key(),
         &ctx.accounts.treasury.key(),
@@ -143,6 +170,14 @@ pub fn handle_withdraw(ctx: Context<MoveCapital>, amount: u64) -> Result<()> {
         ctx.accounts.treasury.amount >= amount,
         VaultError::InsufficientVaultBalance
     );
+    // The subtraction is defined by this very check — and exact for the same reason
+    // as in `deposit`: no transfer fee exists among the allowed extensions.
+    let treasury_amount_after = ctx
+        .accounts
+        .treasury
+        .amount
+        .checked_sub(amount)
+        .ok_or(VaultError::MathOverflow)?;
 
     // Seeds come from state, not from the accounts passed in: `owner` is already
     // checked via `has_one`, and the pair's mints are immutable since deployment (FR-004).
@@ -177,7 +212,31 @@ pub fn handle_withdraw(ctx: Context<MoveCapital>, amount: u64) -> Result<()> {
     // The quote is cleared entirely, back to "as after deployment": a partial clear
     // (say, only `mid_e9`) would leave a spread and a skew from a price that is gone,
     // and the next reader of the state could not tell them from current ones.
-    ctx.accounts.vault.clear_quote();
+    let had_quote = ctx.accounts.vault.clear_quote();
+
+    // One slot for both events: they come from one transaction, and different numbers
+    // here would mean the price was cleared at a different time than the withdrawal.
+    let slot = Clock::get()?.slot;
+
+    emit!(CapitalMoved {
+        vault: ctx.accounts.vault.key(),
+        slot,
+        flow: CapitalFlow::Withdraw,
+        side,
+        amount,
+        treasury_amount_after,
+    });
+
+    // A second event, not a field in the first: to the collector these are two
+    // distinct facts, and a clear caused by a withdrawal must differ in the history
+    // from a clear by any other path in nothing but `reason`.
+    if had_quote {
+        emit!(QuoteCleared {
+            vault: ctx.accounts.vault.key(),
+            slot,
+            reason: QuoteClearReason::CapitalWithdrawn,
+        });
+    }
 
     Ok(())
 }

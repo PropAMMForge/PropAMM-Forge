@@ -34,6 +34,7 @@ use anchor_spl::token_interface::{
 use propamm_quote::{compute_swap, Inventory, Side, SwapRequest};
 
 use crate::errors::VaultError;
+use crate::events::Swapped;
 use crate::state::{Vault, VAULT_SEED};
 
 /// Swap direction, named from the **trader's** side.
@@ -134,16 +135,16 @@ pub fn handle_swap(ctx: Context<Swap>, args: SwapArgs) -> Result<()> {
         min_amount_out: args.min_amount_out,
     };
 
-    let result = compute_swap(
-        &vault.quote_params(),
-        &inventory,
-        &request,
-        Clock::get()?.slot,
-    )
-    .map_err(|err| {
-        msg!("swap rejected: {}", err);
-        VaultError::from(err)
-    })?;
+    // The slot is read once: the freshness guard and the event must speak of the
+    // same moment, otherwise the quote age in the accounting diverges from the one
+    // the swap was actually admitted by.
+    let slot = Clock::get()?.slot;
+
+    let result =
+        compute_swap(&vault.quote_params(), &inventory, &request, slot).map_err(|err| {
+            msg!("swap rejected: {}", err);
+            VaultError::from(err)
+        })?;
 
     // Input first, then output. The order is not cosmetic: if the trader's transfer
     // fails, the vault has not yet given anything away, and the rollback does not
@@ -220,7 +221,25 @@ pub fn handle_swap(ctx: Context<Swap>, args: SwapArgs) -> Result<()> {
         ),
         result.amount_out,
         pay_out_mint.decimals,
-    )
+    )?;
+
+    // The treasury holdings come from `inventory_after`, computed by the math, not
+    // from re-read balances: after the CPI `InterfaceAccount` returns the copy taken
+    // on entry to the instruction, and `reload()` on both accounts is two extra
+    // reads in the tightest budget the program has (SC-002).
+    emit!(Swapped {
+        vault: vault.key(),
+        slot,
+        side: args.side,
+        amount_in: result.amount_in,
+        amount_out: result.amount_out,
+        price_e9: result.price_e9,
+        quote_slot: vault.quote_slot,
+        base_amount_after: result.inventory_after.base_amount,
+        quote_amount_after: result.inventory_after.quote_amount,
+    });
+
+    Ok(())
 }
 
 #[cfg(test)]

@@ -6,7 +6,8 @@
 //! State layout ([`state::Vault`]), asset screening per FR-005
 //! ([`mint_guard`]), deployment (`initialize_vault`), capital movement
 //! (`deposit` / `withdraw`), administration (`set_*`) and quoting
-//! (`update_quote` / `clear_quote`) and the swap itself (`swap`).
+//! (`update_quote` / `clear_quote`), the swap itself (`swap`) and the accounting events
+//! ([`events`]).
 //!
 //! Next: `halt` / `resume` (T052).
 //!
@@ -21,6 +22,7 @@
 use anchor_lang::prelude::*;
 
 pub mod errors;
+pub mod events;
 pub mod instructions;
 pub mod mint_guard;
 pub mod state;
@@ -31,6 +33,7 @@ pub mod state;
 // about the real cause. This is also why handlers are named `handle_*`: otherwise
 // they would collide with the entry points this same macro creates from their names.
 pub use errors::*;
+pub use events::*;
 pub use instructions::*;
 pub use state::*;
 

@@ -99,12 +99,23 @@ impl Vault {
     /// (T014), replacement of the quote signer (T015) and explicit clearing by the
     /// engine (T016). Three copies of this assignment would diverge on the first new
     /// quote field — that is exactly how `max_size_base` almost outlived the price.
-    pub fn clear_quote(&mut self) {
+    ///
+    /// Returns whether there was a quote at all. All three places clear it
+    /// unconditionally — and are entitled to — but the event
+    /// [`crate::events::QuoteCleared`] must be written only about a real clearing:
+    /// otherwise the history gains clearings of a price that never existed.
+    /// The answer to "was there one" lives here, not in three copies of
+    /// `mid_e9 != 0` at the call sites: there is one definition of "quote posted".
+    pub fn clear_quote(&mut self) -> bool {
+        let had_quote = self.mid_e9 != 0;
+
         self.mid_e9 = 0;
         self.spread_bps = 0;
         self.skew_bps = 0;
         self.max_size_base = 0;
         self.quote_slot = 0;
+
+        had_quote
     }
 
     /// Vault PDA seeds: `(owner, base_mint, quote_mint)`.
@@ -215,7 +226,7 @@ mod tests {
     #[test]
     fn clearing_a_quote_leaves_no_quote_field_behind() {
         let mut v = sentinel();
-        v.clear_quote();
+        assert!(v.clear_quote(), "the sentinel has a posted quote");
 
         assert_eq!(v.mid_e9, 0);
         assert_eq!(v.spread_bps, 0);
@@ -227,6 +238,22 @@ mod tests {
         assert_eq!(v.max_quote_age_slots, 13);
         assert_eq!(v.max_skew_bps, 16);
         assert_eq!(v.pricing_authority, sentinel().pricing_authority);
+    }
+
+    /// Clearing what is already cleared is not an event. A second `clear_quote` in a
+    /// row must say "there was nothing", otherwise two `withdraw`s in a row write
+    /// two price clearings into the history, the second of them invented.
+    #[test]
+    fn clearing_a_vault_without_a_quote_reports_nothing_happened() {
+        let mut v = sentinel();
+        assert!(v.clear_quote());
+        assert!(!v.clear_quote());
+
+        let mut fresh = Vault {
+            mid_e9: 0,
+            ..sentinel()
+        };
+        assert!(!fresh.clear_quote(), "no price yet after deployment");
     }
 
     #[test]

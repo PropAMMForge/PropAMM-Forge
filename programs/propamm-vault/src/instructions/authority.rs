@@ -20,6 +20,7 @@
 use anchor_lang::prelude::*;
 
 use crate::errors::VaultError;
+use crate::events::{QuoteClearReason, QuoteCleared};
 use crate::state::{Vault, VAULT_SEED};
 
 /// The owner's risk limits — what the engine cannot change.
@@ -86,7 +87,17 @@ pub fn handle_set_pricing_authority(ctx: Context<AdminOnly>, new_authority: Pubk
 
     let vault = &mut ctx.accounts.vault;
     vault.pricing_authority = new_authority;
-    vault.clear_quote();
+
+    // The key replacement is not in the event stream — it is visible in the transaction
+    // itself, and no console table reads it. The price disappearing, however, must be seen:
+    // otherwise the console shows a quote that is gone until it re-reads the account.
+    if vault.clear_quote() {
+        emit!(QuoteCleared {
+            vault: vault.key(),
+            slot: Clock::get()?.slot,
+            reason: QuoteClearReason::PricingAuthorityChanged,
+        });
+    }
 
     Ok(())
 }

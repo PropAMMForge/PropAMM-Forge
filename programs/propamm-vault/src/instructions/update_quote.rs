@@ -30,6 +30,7 @@ use anchor_lang::prelude::*;
 use propamm_quote::{side_price_e9, QuoteParams, Side};
 
 use crate::errors::VaultError;
+use crate::events::{QuoteClearReason, QuoteCleared, QuoteUpdated};
 use crate::state::{Vault, VAULT_SEED};
 
 /// Quote parameters (FR-006). There is no "per side" price here — both are
@@ -105,6 +106,18 @@ pub fn handle_update_quote(ctx: Context<Quoting>, quote: QuoteUpdate) -> Result<
     vault.max_size_base = quote.max_size_base;
     vault.quote_slot = slot;
 
+    // The previous quote vanishes without a trace: `Vault` holds only the current one.
+    // If this event is not written, that stretch of price history cannot be rebuilt
+    // from anywhere — unlike inventory, which can at least be read from balances.
+    emit!(QuoteUpdated {
+        vault: vault.key(),
+        slot,
+        mid_e9: quote.mid_e9,
+        spread_bps: quote.spread_bps,
+        skew_bps: quote.skew_bps,
+        max_size_base: quote.max_size_base,
+    });
+
     Ok(())
 }
 
@@ -113,7 +126,15 @@ pub fn handle_update_quote(ctx: Context<Quoting>, quote: QuoteUpdate) -> Result<
 ///
 /// Allowed on a halted vault too: removing a price is always a safe action.
 pub fn handle_clear_quote(ctx: Context<Quoting>) -> Result<()> {
-    ctx.accounts.vault.clear_quote();
+    // The slot is read only when there is something to write about: on a vault
+    // without a price this instruction does nothing, and a syscall for it is wasted.
+    if ctx.accounts.vault.clear_quote() {
+        emit!(QuoteCleared {
+            vault: ctx.accounts.vault.key(),
+            slot: Clock::get()?.slot,
+            reason: QuoteClearReason::Explicit,
+        });
+    }
     Ok(())
 }
 
