@@ -51,6 +51,14 @@ case "$CMD" in
     run anchor build
     echo "OK — artifacts in target/deploy, IDL in target/idl"
     ;;
+  fmt)
+    run cargo fmt --all
+    echo "OK — formatted"
+    ;;
+  fmt-check)
+    run cargo fmt --all --check
+    echo "OK — format is clean"
+    ;;
   test)
     run cargo test --workspace
     echo "OK — tests passed"
@@ -63,8 +71,15 @@ case "$CMD" in
     run cargo bench -p propamm-vault-tests
     echo "OK — CU benchmark taken"
     ;;
+  golden)
+    # Overwrites packages/sdk/tests/fixtures/borsh-golden.json with the bytes borsh
+    # writes. Invoke only when the layout changed deliberately: without this variable
+    # the same test only compares and has to be red on a mismatch.
+    run env UPDATE_GOLDEN=1 cargo test -p propamm-vault --test golden_vectors
+    echo "OK — golden vectors updated"
+    ;;
   *)
-    echo "unknown command: $CMD (build | test | clippy | bench-cu)" >&2
+    echo "unknown command: $CMD (build | fmt | fmt-check | test | clippy | bench-cu | golden)" >&2
     exit 2
     ;;
 esac

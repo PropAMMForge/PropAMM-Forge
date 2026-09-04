@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignore": ["target/**", "dist/**", ".anchor/**", "node_modules/**"]
+    "ignore": ["target/**", "dist/**", ".anchor/**", "node_modules/**", "packages/sdk/src/idl.ts"]
   },
   "formatter": {
     "enabled": true,

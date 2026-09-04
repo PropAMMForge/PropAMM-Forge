@@ -16,7 +16,9 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "typecheck": "pnpm -r typecheck",
-    "gate": "pnpm lint && pnpm typecheck && pnpm test"
+    "sync:idl": "node scripts/sync-idl.mjs",
+    "check:idl": "node scripts/sync-idl.mjs --check",
+    "gate": "pnpm check:idl && pnpm lint && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
