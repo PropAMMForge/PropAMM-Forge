@@ -1,0 +1,32 @@
+[package]
+name = "propamm-vault-tests"
+description = "Instruction tests on Mollusk: guards on live accounts and the CU benchmark"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# The harness is an ordinary library, not a `#[cfg(test)]` module: it is shared
+# between seven files in `tests/` and the CU benchmark (T021), and `cfg(test)`
+# does not carry across targets.
+[dependencies]
+anchor-lang.workspace = true
+anchor-spl.workspace = true
+base64.workspace = true
+mollusk-svm.workspace = true
+mollusk-svm-programs-token.workspace = true
+propamm-quote.workspace = true
+solana-account.workspace = true
+solana-instruction.workspace = true
+solana-program-error.workspace = true
+solana-program-option.workspace = true
+solana-program-pack.workspace = true
+solana-pubkey.workspace = true
+solana-svm-log-collector.workspace = true
+
+# `no-entrypoint` is mandatory: without it the crate pulls the BPF entry point
+# into the host build. The program code itself does not run here — the .so from
+# `target/deploy` does; the crate is needed only for the types, the discriminators
+# and the PDA derivation, so the test does not hold a second copy of the layout.
+propamm-vault = { path = "../../programs/propamm-vault", features = ["no-entrypoint"] }

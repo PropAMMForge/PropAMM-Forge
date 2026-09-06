@@ -24,6 +24,31 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # The instruction tests (T020) execute the REAL .so, not the host build of
+      # the crate: overflow-checks, stack size and the behaviour of `msg!` under BPF are their own.
+      # Without this step the 68 tests in tests/program would fail asking to build
+      # the program first.
+      #
+      # `cargo-build-sbf`, not `anchor build`: the IDL is not needed here, and anchor-cli
+      # is installed via avm and compiled from source — a dozen minutes on every PR.
+      #
+      # Both flags are MANDATORY and not cosmetic. `anchor build` defaults to
+      # `--arch v3 --tools-version v1.57`, while bare `cargo-build-sbf` defaults to
+      # `v0`. The difference is not in size (303 312 versus 262 176 B) but in the fact
+      # that a v0 build gives the warning "Stack offset of 4104 exceeded max offset
+      # of 4096" in `Swap::try_accounts` — i.e. CI would run the tests on a binary
+      # with an overflowed frame that nobody ever deploys.
+      - name: Solana toolchain
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.10/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: BPF artifact
+        run: >
+          cargo-build-sbf
+          --manifest-path programs/propamm-vault/Cargo.toml
+          --arch v3 --tools-version v1.57
+
       - name: Format
         run: cargo fmt --all -- --check
 
@@ -36,6 +61,8 @@ jobs:
       # Cargo.lock is the pin of the open ">=2" ranges from jupiter-amm-interface.
       # If the build changes it, the dependencies moved on their own, and that has
       # to be known here, not on devnet.
+      # `cargo-build-sbf` runs with its own rustc and its own resolver, so this step
+      # also catches the case where the BPF build pulls the lock away from the host one.
       - name: Lock file unchanged
         run: git diff --exit-code Cargo.lock
 

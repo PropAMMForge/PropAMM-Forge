@@ -60,6 +60,13 @@ case "$CMD" in
     echo "OK — format is clean"
     ;;
   test)
+    # The instruction tests (T020) execute the .so itself, not the host build of the crate.
+    # Without the artifact they fail — their message is clear, but saying it here
+    # is cheaper than after a three-minute compilation.
+    if [[ ! -f target/deploy/propamm_vault.so ]]; then
+      echo "no target/deploy/propamm_vault.so — first: $0 build" >&2
+      exit 1
+    fi
     run cargo test --workspace
     echo "OK — tests passed"
     ;;
@@ -68,6 +75,10 @@ case "$CMD" in
     echo "OK — clippy is clean"
     ;;
   bench-cu)
+    if [[ ! -f target/deploy/propamm_vault.so ]]; then
+      echo "no target/deploy/propamm_vault.so — first: $0 build" >&2
+      exit 1
+    fi
     run cargo bench -p propamm-vault-tests
     echo "OK — CU benchmark taken"
     ;;

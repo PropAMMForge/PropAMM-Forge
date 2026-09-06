@@ -2,7 +2,7 @@
 resolver = "2"
 # One workspace for the on-chain and off-chain parts. Only programs/propamm-vault
 # is built for BPF; the rest are host crates, cargo-build-sbf does not touch them.
-members = ["crates/*", "programs/*"]
+members = ["crates/*", "programs/*", "tests/program"]
 
 [workspace.package]
 version = "0.1.0"
@@ -33,6 +33,26 @@ mollusk-svm = "0.15.1"
 mollusk-svm-bencher = "0.15.1"
 mollusk-svm-programs-token = "0.15.1"
 proptest = "1.11"
+
+# The Mollusk harness lives on FOURTH-generation solana crates, while anchor-lang
+# is on the third. This is not a resolver mistake: `solana-pubkey` is present in
+# Cargo.lock twice (3.0.0 under Anchor, 4.2.1 under Mollusk), and the two `Pubkey`s
+# are NOT compatible with each other. Tests convert keys via `to_bytes()` — see `tests/program`.
+# `solana-instruction` is meanwhile single (3.4.1) and links against pubkey 4.2.1 itself.
+#
+# The on-chain build is unaffected: the crates below are dependencies of the test
+# crate, programs/propamm-vault has none of them.
+solana-account = "4.3"
+solana-instruction = "3.4"
+solana-program-error = "3.0"
+solana-program-option = "3.1"
+solana-program-pack = "3.1"
+solana-pubkey = "4.2"
+solana-svm-log-collector = "4.2"
+
+# Parsing the `Program data:` line from the log — otherwise the T018 events cannot be read.
+base64 = "0.22"
+propamm-quote = { path = "crates/propamm-quote" }
 
 anyhow = "1"
 thiserror = "2"
