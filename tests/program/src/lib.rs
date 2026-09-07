@@ -30,6 +30,7 @@
 //! BPF are their own. If the file is missing, the test says `wsl-build.sh build`
 //! is needed first rather than failing with an obscure `No such file`.
 
+pub mod cu;
 pub mod events;
 pub mod fixtures;
 pub mod ix;

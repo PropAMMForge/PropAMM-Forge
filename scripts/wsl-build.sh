@@ -80,7 +80,11 @@ case "$CMD" in
       exit 1
     fi
     run cargo bench -p propamm-vault-tests
-    echo "OK — CU benchmark taken"
+    # This table is what the benchmark is invoked for. It is printed last, so it is
+    # taken from its header to the end of the log; without this line "OK" would be
+    # the only thing visible on screen, and the numbers would stay in the file.
+    sed -n '/Instruction CU/,$p' "$LOG"
+    echo "OK — CU benchmark taken, SC-002 budget held"
     ;;
   golden)
     # Overwrites packages/sdk/tests/fixtures/borsh-golden.json with the bytes borsh

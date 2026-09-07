@@ -30,3 +30,13 @@ solana-svm-log-collector.workspace = true
 # `target/deploy` does; the crate is needed only for the types, the discriminators
 # and the PDA derivation, so the test does not hold a second copy of the layout.
 propamm-vault = { path = "../../programs/propamm-vault", features = ["no-entrypoint"] }
+
+[dev-dependencies]
+mollusk-svm-bencher.workspace = true
+
+# `harness = false` is mandatory: with the stock harness `cargo bench` looks for
+# `#[bench]`, which is still a nightly API. Here is a plain `main` that measures,
+# prints the table and fails if the swap went over the SC-002 budget.
+[[bench]]
+name = "bench"
+harness = false

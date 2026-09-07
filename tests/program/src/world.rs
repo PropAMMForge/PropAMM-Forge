@@ -64,8 +64,39 @@ pub const TREASURY_QUOTE: u64 = 15_000_000_000;
 
 const WALLET_BASE: u64 = 500_000_000_000;
 const WALLET_QUOTE: u64 = 75_000_000_000;
-const START_SLOT: u64 = 1_000;
+/// The slot every world starts at.
+///
+/// Public for the CU benchmark: `MolluskComputeUnitBencher` takes its own
+/// `Mollusk`, and that one has to stand at the same slot, otherwise the quote
+/// posted while preparing the case arrives at it already stale — and "measuring
+/// the swap" would measure the cost of a refusal.
+pub const START_SLOT: u64 = 1_000;
 const LAMPORTS: u64 = 1_000_000_000_000;
+
+/// An empty `Mollusk` with our program, the token programs and the clock at
+/// [`START_SLOT`].
+///
+/// A separate function because the same set is needed by two owners: [`World`]
+/// keeps its own instance, the CU bencher keeps its own, and they have to be
+/// assembled identically. A second one assembled slightly differently would measure a different program.
+///
+/// # Panics
+///
+/// If the `.so` is missing — see [`crate::program_elf`].
+#[must_use]
+pub fn mollusk() -> Mollusk {
+    let mut mollusk = Mollusk::default();
+    mollusk.add_program_with_loader_and_elf(
+        &svm(&propamm_vault::ID),
+        &LOADER_V3,
+        &crate::program_elf(),
+    );
+    mollusk_svm_programs_token::token::add_program(&mut mollusk);
+    mollusk_svm_programs_token::token2022::add_program(&mut mollusk);
+    mollusk_svm_programs_token::associated_token::add_program(&mut mollusk);
+    mollusk.warp_to_slot(START_SLOT);
+    mollusk
+}
 
 /// The result of one call together with the log.
 pub struct Outcome {
@@ -190,16 +221,7 @@ impl World {
     /// If the `.so` is missing — see [`crate::program_elf`].
     #[must_use]
     pub fn with_token_programs(base_program: AnchorKey, quote_program: AnchorKey) -> Self {
-        let mut mollusk = Mollusk::default();
-        mollusk.add_program_with_loader_and_elf(
-            &svm(&propamm_vault::ID),
-            &LOADER_V3,
-            &crate::program_elf(),
-        );
-        mollusk_svm_programs_token::token::add_program(&mut mollusk);
-        mollusk_svm_programs_token::token2022::add_program(&mut mollusk);
-        mollusk_svm_programs_token::associated_token::add_program(&mut mollusk);
-        mollusk.warp_to_slot(START_SLOT);
+        let mollusk = mollusk();
 
         let owner = named(1);
         let pricing_authority = named(2);
@@ -328,14 +350,16 @@ impl World {
         self.store.get(&svm(key)).cloned().unwrap_or_default()
     }
 
-    /// Execute an instruction. State is written back **only on success**.
-    pub fn exec(&mut self, instruction: &Instruction) -> Outcome {
-        let logger = LogCollector::new_ref();
-        self.mollusk.logger = Some(Rc::clone(&logger));
-
-        // The order is kept, repeats are removed: both sides of the pair may point at
-        // the same token program, and an account listed twice is not the same thing
-        // to Mollusk as one listed once.
+    /// Accounts for an instruction: in the order they are listed, without repeats.
+    ///
+    /// The order is kept, repeats are removed: both sides of the pair may point at
+    /// the same token program, and an account listed twice is not the same thing
+    /// to Mollusk as one listed once.
+    ///
+    /// Public for the CU benchmark: it executes the instruction with its own
+    /// `Mollusk`, and the slice of state has to be the same one [`World::exec`] would get.
+    #[must_use]
+    pub fn accounts_for(&self, instruction: &Instruction) -> Vec<(SvmKey, Account)> {
         let mut seen: Vec<SvmKey> = Vec::with_capacity(instruction.accounts.len());
         let mut accounts: Vec<(SvmKey, Account)> = Vec::with_capacity(instruction.accounts.len());
         for meta in &instruction.accounts {
@@ -346,7 +370,15 @@ impl World {
             let account = self.store.get(&meta.pubkey).cloned().unwrap_or_default();
             accounts.push((meta.pubkey, account));
         }
+        accounts
+    }
 
+    /// Execute an instruction. State is written back **only on success**.
+    pub fn exec(&mut self, instruction: &Instruction) -> Outcome {
+        let logger = LogCollector::new_ref();
+        self.mollusk.logger = Some(Rc::clone(&logger));
+
+        let accounts = self.accounts_for(instruction);
         let result = self.mollusk.process_instruction(instruction, &accounts);
         let logs = RefCell::borrow(&logger).get_recorded_content().to_vec();
 

@@ -111,6 +111,60 @@ pub fn mint_with_transfer_fee(token_program: &AnchorKey, decimals: u8) -> Accoun
     rent_exempt(data, token_program)
 }
 
+/// A Token-2022 mint with an extension FR-005 **allows**.
+///
+/// Needed by the CU benchmark: the SC-002 gate has to stand on the worst pair
+/// of those that pass `mint_guard` at all, not on the most convenient one.
+/// `MetadataPointer` is on the allow list and has a fixed length, so the mint
+/// grows by it without the trouble of variable-length TLV.
+///
+/// **The extension costs more than it seems.** The expectation was "single
+/// CU": extra account bytes are paid only on CPI, and there at hundredths of a
+/// unit. Measured: **+782 CU** on a swap against the same pair without the
+/// extension (21 748 versus 20 966). The difference is not in bytes: Token-2022
+/// parses the mint's TLV inside `transfer_checked`, and that grows from 1 841 to
+/// 2 139 CU on each of the two transfers. That is why this case is in the
+/// benchmark — without it the SC-002 gate would report a number from the cheapest pair.
+///
+/// Deliberately not `TokenMetadata`: it is variable-length and would make the
+/// fixture noticeably more complex. Judging by the measurement it would be more
+/// expensive than `MetadataPointer`, not cheaper — and that is an open spot in
+/// the gate, recorded as such.
+///
+/// # Panics
+///
+/// If the extension does not initialize — then the fixture is not what it calls
+/// itself, and the number measured on it means nothing.
+#[must_use]
+pub fn mint_with_metadata_pointer(token_program: &AnchorKey, decimals: u8) -> Account {
+    use anchor_spl::token_2022::spl_token_2022::extension::metadata_pointer::MetadataPointer;
+
+    let space =
+        ExtensionType::try_calculate_account_len::<MintState>(&[ExtensionType::MetadataPointer])
+            .expect("the length of a mint with an extension does not compute");
+
+    let mut data = vec![0u8; space];
+    {
+        let mut state = StateWithExtensionsMut::<MintState>::unpack_uninitialized(&mut data)
+            .expect("an empty mint does not unpack");
+        state
+            .init_extension::<MetadataPointer>(true)
+            .expect("MetadataPointer does not initialize");
+        state.base = MintState {
+            mint_authority: COption::Some(svm(&crate::keys::named(200))),
+            supply: 1_000_000_000_000_000,
+            decimals,
+            is_initialized: true,
+            freeze_authority: COption::None,
+        };
+        state.pack_base();
+        state
+            .init_account_type()
+            .expect("the account type cannot be set");
+    }
+    rent_exempt(data, token_program)
+}
+
 /// A token account with a given balance.
 #[must_use]
 pub fn token_account(
