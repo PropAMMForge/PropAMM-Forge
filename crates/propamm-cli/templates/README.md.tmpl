@@ -1,0 +1,54 @@
+# {{project}}
+
+A Prop AMM on Solana: a private venue whose capital belongs to **you alone**.
+Created by `forge init`.
+
+## What is here already
+
+| | |
+|---|---|
+| Cluster | `{{cluster}}` — `{{rpc_url}}` |
+| Program | `{{program_id}}` |
+| Owner | `{{owner}}` |
+| Vault `{{vault}}` | `{{base_mint}}` / `{{quote_mint}}` |
+| Quote freshness limit | {{max_quote_age_slots}} slots |
+| Hard skew bound | {{max_skew_bps}} bps |
+
+**Nothing is on chain yet.** The directory holds a statement of intent; the vault
+appears on the network after `forge deploy`.
+
+## Next — four commands
+
+```sh
+forge deploy                      # create the vault on the network
+forge fund --base 100 --quote 15000
+forge quote --mid 150 --spread-bps 10 --max-size 10
+forge status                      # addresses, balances, quote age
+```
+
+## Worth knowing right away
+
+**The program is shared, the vault is yours.** There is one bytecode on the network
+for everyone; your AMM is an account whose address derives from your owner
+address and the pair. Nobody but the owner can put capital into it or take it out.
+
+**One pair per vault.** A second pair is a second `forge deploy` with another `--pair`;
+there is no shared pool between pairs. The project keeps them as a list and shows them together.
+
+**A quote lives in slots, not minutes.** A swap at a quote older than the
+freshness limit is refused by the program. Setting the price by hand via `forge quote`
+is fine for checking; keeping it alive is the engine's job.
+
+**Assets with extensions that change the transfer amount are not accepted.** A mint
+with a transfer hook, a transfer fee or a permanent delegate is refused **at
+`forge deploy`**, not at the first swap.
+
+## Keys
+
+Commands are signed with the key from `propamm.toml` → `owner.keypair`. The right
+to post quotes (`pricing_authority`) and the right to halt in an emergency
+(`halt_authority`) start in the same hands; they can be handed over separately
+without handing over the right to move capital.
+
+`.gitignore` already excludes `*-keypair.json` and `.env`. Check that before
+making the first commit.

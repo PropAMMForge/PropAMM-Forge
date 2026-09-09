@@ -1,0 +1,36 @@
+[package]
+name = "propamm-cli"
+description = "forge — the Prop AMM builder: init / deploy / fund / quote / status"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# The executable is named `forge`, as in PLAN. The clash with Foundry (Solidity)
+# is a conscious one: the audiences do not overlap, and renaming would cost an
+# edit of the approved PLAN and every mention in TASKS.
+[[bin]]
+name = "forge"
+path = "src/main.rs"
+
+[dependencies]
+# Pubkey comes from anchor-lang, not from fourth-generation crates: the CLI derives
+# the vault address via `propamm_vault::state::Vault::pda`, and a second incompatible
+# `Pubkey` on that path would give the same divergence the tests have to cross
+# via `to_bytes` for (see `tests/program/src/keys.rs`).
+anchor-lang.workspace = true
+anyhow.workspace = true
+clap = { workspace = true, features = ["derive"] }
+dirs.workspace = true
+serde.workspace = true
+solana-keypair.workspace = true
+solana-signer.workspace = true
+toml.workspace = true
+
+# For the program `ID` and the state types. `no-entrypoint` is mandatory — otherwise
+# the crate pulls the BPF entry point into the host build.
+propamm-vault = { path = "../../programs/propamm-vault", features = ["no-entrypoint"] }
+
+[dev-dependencies]
+tempfile.workspace = true
