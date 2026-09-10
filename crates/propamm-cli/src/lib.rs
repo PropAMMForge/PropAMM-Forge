@@ -12,5 +12,12 @@
 //! this the user needs neither Rust, nor Anchor, nor several SOL for a program —
 //! and that is exactly why SC-001 (15 minutes, ≤ 5 commands) is reachable.
 
+pub mod amount;
+pub mod chain;
 pub mod config;
+pub mod deploy;
+pub mod fund;
 pub mod init;
+pub mod quote;
+pub mod rpc;
+pub mod status;

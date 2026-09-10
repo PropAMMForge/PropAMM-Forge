@@ -54,15 +54,33 @@ solana-svm-log-collector = "4.2"
 base64 = "0.22"
 propamm-quote = { path = "crates/propamm-quote" }
 
-# CLI. `solana-keypair` lives on THIRD-generation solana crates — the same
-# ones anchor-lang is on — so `Pubkey` in the CLI is one type and no crossing via
-# `to_bytes` is needed here (unlike the tests, where Mollusk sits alongside).
+# CLI. This whole group lives on THIRD-generation solana crates — the same ones
+# anchor-lang is on — so `Pubkey`, `Instruction` and `Message` in the CLI are one
+# type and no `to_bytes` crossing is needed here (unlike the tests, where Mollusk
+# on the fourth generation sits alongside). Verified by building the CLI.
+#
+# `solana-client` is DELIBERATELY not taken (T023 decision): it pulls in almost the
+# whole agave stack — +378 crates versus +80 here — while of its forty methods
+# `forge` needs six, and instructions are assembled via `anchor_lang::InstructionData` anyway.
+# One more point of contact with that stack would mean one more open version
+# range next to `jupiter-amm-interface`, which asks for solana crates as ">=2".
+# Verified with the resolver: none of the options moves `solana-pubkey` 3.0.0.
 clap = "4"
 dirs = "7"
+solana-hash = "3.1"
 solana-keypair = "3.1"
+solana-message = { version = "3.1", features = ["bincode", "serde"] }
 solana-signer = "3.0"
+solana-transaction = { version = "3.1", features = ["bincode", "serde", "verify"] }
 tempfile = "3"
 toml = "1"
+
+# HTTP to the node. rustls instead of system TLS: the build has to pass the same
+# way in WSL and on Windows.
+ureq = "3"
+
+# The transaction is serialized with bincode — that is Solana's wire format, not our choice.
+bincode = "1.3"
 
 anyhow = "1"
 thiserror = "2"

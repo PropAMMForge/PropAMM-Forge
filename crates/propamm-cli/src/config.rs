@@ -221,6 +221,36 @@ impl ProjectConfig {
         Ok(config)
     }
 
+    /// The vault by selector, or the only one if the project has a single vault.
+    ///
+    /// An omitted `--vault` in a single-pair project is not an ambiguity but the
+    /// normal case: `init` creates exactly one vault, and demanding a selector right
+    /// after it would add a command to the SC-001 budget for nothing. As soon as
+    /// there are two pairs, a silent choice of "the first" would be a guess about
+    /// capital, so the choice is required explicitly.
+    ///
+    /// # Errors
+    ///
+    /// If there are no vaults at all, or several and no selector is given, or the
+    /// selector is not found.
+    pub fn select(&self, name: Option<&str>) -> Result<&VaultEntry> {
+        match name {
+            Some(name) => self.vault(name),
+            None => match self.vaults.as_slice() {
+                [only] => Ok(only),
+                [] => bail!("the config declares no vault"),
+                many => bail!(
+                    "the project has {} vaults — choose one: --vault <{}>",
+                    many.len(),
+                    many.iter()
+                        .map(|vault| vault.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" | ")
+                ),
+            },
+        }
+    }
+
     /// The vault by selector.
     ///
     /// # Errors

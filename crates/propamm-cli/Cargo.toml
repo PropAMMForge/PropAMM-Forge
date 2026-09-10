@@ -20,13 +20,35 @@ path = "src/main.rs"
 # `Pubkey` on that path would give the same divergence the tests have to cross
 # via `to_bytes` for (see `tests/program/src/keys.rs`).
 anchor-lang.workspace = true
+anchor-spl.workspace = true
 anyhow.workspace = true
+base64.workspace = true
+bincode.workspace = true
 clap = { workspace = true, features = ["derive"] }
 dirs.workspace = true
 serde.workspace = true
-solana-keypair.workspace = true
-solana-signer.workspace = true
+serde_json.workspace = true
 toml.workspace = true
+
+# Transport. `ureq` with rustls rather than system TLS: the build has to pass the
+# same way in WSL and on Windows, and `openssl-sys` is the most common reason it
+# does not pass everywhere.
+ureq = { workspace = true, features = ["json"] }
+
+# Transaction assembly and signing. This is the THIRD generation of solana crates —
+# the same one anchor-lang lives on — so `Instruction`, `Pubkey` and `Message` are
+# one type here and no `to_bytes` bridge is needed (unlike the tests, where Mollusk
+# on the fourth generation sits alongside). Verified by building; if it ever
+# diverges, it shows up as a type error here, not silently.
+solana-hash.workspace = true
+solana-keypair.workspace = true
+solana-message.workspace = true
+solana-signer.workspace = true
+solana-transaction.workspace = true
+
+# The same quote math as in the program and the adapter: `forge quote` computes
+# bid/ask and screens out parameters outside the domain before the transaction.
+propamm-quote.workspace = true
 
 # For the program `ID` and the state types. `no-entrypoint` is mandatory — otherwise
 # the crate pulls the BPF entry point into the host build.
