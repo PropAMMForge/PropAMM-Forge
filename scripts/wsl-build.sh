@@ -51,6 +51,16 @@ case "$CMD" in
     run anchor build
     echo "OK — artifacts in target/deploy, IDL in target/idl"
     ;;
+  build-sbf)
+    # The artifact that goes to the network. `anchor build` on this toolchain writes
+    # SBPFv3 (`e_flags = 3`), and Agave 3.1.10 does not run such bytecode at all:
+    # in genesis it gives `Program is not deployed`, and loader-v4 refuses with
+    # `invalid file header`. `cargo-build-sbf` writes v0 — which the mainnet loader
+    # accepts too, so there is one canonical artifact and SC-006 has nowhere to
+    # diverge. `anchor build` remains for the IDL in target/idl.
+    run cargo-build-sbf --manifest-path programs/propamm-vault/Cargo.toml
+    echo "OK — $(ls -l target/deploy/propamm_vault.so | awk '{print $5}') bytes, SBPFv0"
+    ;;
   fmt)
     run cargo fmt --all
     echo "OK — formatted"
@@ -86,6 +96,21 @@ case "$CMD" in
     sed -n '/Instruction CU/,$p' "$LOG"
     echo "OK — CU benchmark taken, SC-002 budget held"
     ;;
+  e2e)
+    # The end-to-end run (T024). In a plain `cargo test` it is ignored: it needs
+    # solana-test-validator, a free port 8899 and the artifact on the network.
+    if [[ ! -f target/deploy/propamm_vault.so ]]; then
+      echo "no target/deploy/propamm_vault.so — first: $0 build-sbf" >&2
+      exit 1
+    fi
+    # The binary is built separately: `cargo test` builds only what the test depends
+    # on, and it does not depend on the binary — the test LAUNCHES it.
+    run cargo build -p propamm-cli
+    # `--test-threads=1` is not about memory but about the port: there is one validator on the network.
+    run cargo test -p propamm-e2e -- --ignored --nocapture --test-threads=1
+    sed -n '/SC-001 — from/,/^$/p' "$LOG"
+    echo "OK — US1 cycle passed, SC-001 measured"
+    ;;
   golden)
     # Overwrites packages/sdk/tests/fixtures/borsh-golden.json with the bytes borsh
     # writes. Invoke only when the layout changed deliberately: without this variable
@@ -94,7 +119,7 @@ case "$CMD" in
     echo "OK — golden vectors updated"
     ;;
   *)
-    echo "unknown command: $CMD (build | fmt | fmt-check | test | clippy | bench-cu | golden)" >&2
+    echo "unknown command: $CMD (build | build-sbf | fmt | fmt-check | test | clippy | bench-cu | e2e | golden)" >&2
     exit 2
     ;;
 esac

@@ -2651,6 +2651,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "propamm-e2e"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "anyhow",
+ "bincode",
+ "propamm-cli",
+ "propamm-vault",
+ "serde_json",
+ "solana-keypair",
+ "solana-message 3.1.0",
+ "solana-signer",
+ "solana-transaction 3.1.0",
+ "tempfile",
+]
+
+[[package]]
 name = "propamm-quote"
 version = "0.1.0"
 dependencies = [

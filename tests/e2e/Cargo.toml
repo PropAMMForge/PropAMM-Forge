@@ -1,0 +1,37 @@
+[package]
+name = "propamm-e2e"
+description = "End-to-end runs on a local network: the US1 cycle and the SC-001 measurement"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# The harness is a library, not a `#[cfg(test)]` module, for the same reason as in
+# `tests/program`: the validator, the mints and the `forge` launcher will also be
+# needed by T033 (`engine.rs`), and `cfg(test)` does not carry across targets.
+#
+# The whole group lives on THIRD-generation solana crates — the same ones as
+# `anchor-lang` and `propamm-cli`. Mollusk does not enter here, so there is no
+# `to_bytes` crossing, unlike `tests/program`.
+[dependencies]
+anchor-lang.workspace = true
+anchor-spl.workspace = true
+anyhow.workspace = true
+bincode.workspace = true
+serde_json.workspace = true
+solana-keypair.workspace = true
+solana-message.workspace = true
+solana-signer.workspace = true
+solana-transaction.workspace = true
+tempfile.workspace = true
+
+# The node client and the instruction builders come from the CLI rather than being
+# written a second time: a test that went to the network with its own copy of the
+# same offsets and discriminators would be checking itself.
+propamm-cli = { path = "../../crates/propamm-cli" }
+
+# `no-entrypoint` is mandatory: without it the crate pulls the BPF entry point
+# into the host build. The .so from `target/deploy` is what executes; only the types,
+# the discriminators and the PDA derivation are taken from here.
+propamm-vault = { path = "../../programs/propamm-vault", features = ["no-entrypoint"] }

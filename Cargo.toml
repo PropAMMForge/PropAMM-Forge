@@ -2,7 +2,7 @@
 resolver = "2"
 # One workspace for the on-chain and off-chain parts. Only programs/propamm-vault
 # is built for BPF; the rest are host crates, cargo-build-sbf does not touch them.
-members = ["crates/*", "programs/*", "tests/program"]
+members = ["crates/*", "programs/*", "tests/e2e", "tests/program"]
 
 [workspace.package]
 version = "0.1.0"
