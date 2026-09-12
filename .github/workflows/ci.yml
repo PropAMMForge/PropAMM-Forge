@@ -117,3 +117,12 @@ jobs:
             exit 1
           fi
           echo ".env is outside the index"
+
+      # The sweep goes over the WHOLE history — that is why fetch-depth: 0 is set above.
+      # The `ci` mode differs from the local one in one thing: the personal-data list
+      # is not here and cannot be (it lives outside the repository on purpose), so its
+      # absence is not counted as a failure. All structural patterns run, together
+      # with the self-check: a pattern that silently stopped matching and a clean
+      # repository look the same from the outside.
+      - name: No build-machine traces in the history
+        run: bash scripts/trace-sweep.sh ci

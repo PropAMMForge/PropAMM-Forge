@@ -46,8 +46,8 @@ impl Validator {
         ensure_port_free()?;
 
         // The ledger goes into a temporary directory, not the repository. In WSL that
-        // the native file system: on a mounted Windows drive the validator writes hundreds of
-        // megabytes through 9p and comes up many times slower, while SC-001 measures
+        // is `/tmp`, i.e. the native file system: on a mounted Windows drive the
+        // validator writes hundreds of megabytes through 9p and comes up many times
         // slower, while SC-001 measures minutes.
         let base = std::env::temp_dir().join(format!("propamm-e2e-{}", std::process::id()));
         let ledger = base.join("ledger");
