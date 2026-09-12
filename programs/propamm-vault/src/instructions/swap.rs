@@ -107,13 +107,13 @@ pub struct Swap<'info> {
     #[account(mut)]
     pub trader_quote_account: InterfaceAccount<'info, TokenAccount>,
 
-    /// **`Box` is not cosmetic.** `try_accounts` puts the deserialized state of all
-    /// ten accounts on the stack, and the SBPF frame is exactly 4 KiB. Four
-    /// `TokenAccount`s of 165 bytes plus two `Mint`s of 82 came to 4104 bytes:
-    /// under `anchor build` (SBPFv3) that is only a warning, under `cargo-build-sbf`
-    /// (SBPFv0, and that is what goes to the network) it is a build error. The mints
-    /// are the cheapest to move to the heap: they are needed only for `decimals` in
-    /// `transfer_checked`, and there is no hot access to them at all.
+    // **`Box` is not cosmetic.** `try_accounts` puts the deserialized state of all
+    // ten accounts on the stack, and the SBPF frame is exactly 4 KiB. Four
+    // `TokenAccount`s of 165 bytes plus two `Mint`s of 82 came to 4104 bytes:
+    // under `anchor build` (SBPFv3) that is only a warning, under `cargo-build-sbf`
+    // (SBPFv0, and that is what goes to the network) it is a build error. The mints
+    // are the cheapest to move to the heap: they are needed only for `decimals` in
+    // `transfer_checked`, and there is no hot access to them at all.
     #[account(constraint = base_mint.key() == vault.base_mint @ VaultError::AccountMismatch)]
     pub base_mint: Box<InterfaceAccount<'info, Mint>>,
 
