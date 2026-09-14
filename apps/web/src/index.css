@@ -286,6 +286,17 @@ body {
   text-align: right;
 }
 
+/* Registry cells do not wrap — a break inside an amount reads as two amounts,
+   and "buy base" on two lines throws off the alignment of the whole tape. The
+   exception is the last column: it holds the refusal reason, and that has to wrap. */
+.rt td {
+  white-space: nowrap;
+}
+
+.rt td:last-child {
+  white-space: normal;
+}
+
 .rt tbody tr:last-child td {
   border-bottom: none;
 }
@@ -637,6 +648,12 @@ body {
     display: none;
   }
 
+  /* The table becomes block-level, and `display: table-caption` leaves the caption
+     the width of its longest word — the text spills one word per line. */
+  .rt caption {
+    display: block;
+  }
+
   .rt,
   .rt tbody,
   .rt tr,
@@ -657,6 +674,7 @@ body {
   .rt td {
     border-bottom: none;
     padding: 4px 0;
+    white-space: normal;
     display: flex;
     align-items: baseline;
     justify-content: space-between;
