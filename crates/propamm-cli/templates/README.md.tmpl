@@ -19,12 +19,19 @@ appears on the network after `forge deploy`.
 
 ## Next — four commands
 
+`fund` is called twice: once per side of the pair.
+
 ```sh
-forge deploy                      # create the vault on the network
-forge fund --base 100 --quote 15000
-forge quote --mid 150 --spread-bps 10 --max-size 10
-forge status                      # addresses, balances, quote age
+forge deploy                          # create the vault on the network
+forge fund --side base --amount 100   # fund each side separately
+forge fund --side quote --amount 15000
+forge quote --mid 150 --spread-bps 10 --size 10
+forge status                          # addresses, balances, quote age
 ```
+
+`--spread-bps` is **half** of the spread: 10 here means 20 bps between the sides.
+`--size` sets the maximum order size in human units of the base asset;
+a swap above it is refused by the program outright, with no partial fill.
 
 ## Worth knowing right away
 
