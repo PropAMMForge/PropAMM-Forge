@@ -1,0 +1,75 @@
+name: Pages
+
+# Publishes `apps/web` — the console prototype on mock data — to GitHub Pages.
+#
+# One-time setup in the repository: Settings → Pages → Source: "GitHub Actions".
+# Without it the deploy job fails with "Resource not accessible" on the first run.
+#
+# The site is a project site, so it lives under `/<repo>/`. The base path is
+# derived from the repository name here and handed to Vite as BASE_PATH; the
+# router reads the same value back through `import.meta.env.BASE_URL`.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'packages/sdk/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig.base.json'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a newer push cancels the one in flight.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
+        run: pnpm --filter @propamm/web build
+
+      # Pages has no SPA fallback: a direct hit on `/<repo>/vaults` returns the
+      # 404 page. Serving the same bundle as 404.html lets the router take over
+      # from there — the status code is still 404, which is fine for a prototype.
+      - name: SPA fallback
+        run: cp apps/web/dist/index.html apps/web/dist/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

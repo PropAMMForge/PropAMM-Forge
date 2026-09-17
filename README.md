@@ -97,6 +97,16 @@ for it is claimed anywhere, and inventing one would be a number off a shelf.
 `apps/web` runs on **mock data**. Every figure on those screens is drawn, not
 observed: there is no collector, no database and no chain behind them yet.
 
+The prototype is published to GitHub Pages by `.github/workflows/pages.yml` on
+every push to `main` that touches it (Settings → Pages → Source must be set to
+"GitHub Actions" once). It is served under `/<repo>/`, so the Vite base path
+comes from `BASE_PATH` and the router takes its basename from
+`import.meta.env.BASE_URL`; to reproduce the build locally:
+
+```sh
+BASE_PATH=/PropAMM-Forge/ pnpm --filter @propamm/web build
+```
+
 ## Building
 
 The program must be built with `cargo-build-sbf`, not `anchor build`. On this
