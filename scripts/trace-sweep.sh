@@ -139,9 +139,11 @@ check 'absolute WSL path' \
   '/mnt/e/proj/x'
 
 # The `[a-zA-Z_.]` tail here is not cosmetic: without it the pattern would catch
-# "https://" (letter, colon, slash) in every link.
+# "https://" (letter, colon, slash) in every link. The `\b` in front is the
+# second lesson: a drive letter is a single letter, and without the boundary the
+# pattern fires on `you:\n` in every English string with an escaped newline.
 check 'absolute Windows path' \
-  '[a-z]:[\\/][a-zA-Z_.]' \
+  '\b[a-z]:[\\/][a-zA-Z_.]' \
   'C:\Users\bob'
 
 check 'user home directory' \
