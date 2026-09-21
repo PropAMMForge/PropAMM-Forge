@@ -1,0 +1,24 @@
+[package]
+name = "propamm-engine"
+description = "Off-chain pricing engine, Rust core: feed reader, tick, model, sender"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+# The scale of the price (`PRICE_SCALE`) and the bps denominator come from the
+# same crate the program computes with: a mid the engine posts is only right if
+# it is in the units `compute_swap` expects, and this is where that is pinned.
+propamm-quote.workspace = true
+
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+# Transport to Hermes. The same `ureq` + rustls as in the CLI (T023 decision):
+# an SSE stream is an ordinary HTTP body read line by line, and a second HTTP
+# stack — async, with its own TLS — would be a second open version range in the lock.
+ureq.workspace = true
