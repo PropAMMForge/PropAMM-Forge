@@ -22,9 +22,18 @@
 //! `ureq` with rustls is already the workspace's HTTP client (the T023 decision
 //! for the CLI). An SSE stream is a plain HTTP body read line by line, and
 //! `BufRead::lines` is enough for it. The reader runs on its own thread and
-//! hands events over an [`mpsc`] channel; the consumer's `recv_timeout` is what
-//! will notice silence (FR-014, T027). No async HTTP crate — no second TLS stack
-//! in the lock.
+//! hands events over an [`mpsc`] channel, and [`Watch`] on the other end turns
+//! silence on that channel into a withdrawal (FR-014). No async HTTP crate — no
+//! second TLS stack in the lock.
+//!
+//! # Silence is a state, not an absence
+//!
+//! A market maker that repeats its last known price while the feed is quiet is
+//! quoting into a market it cannot see. So the quote is live only while a price
+//! that passed the policy is younger than a configured bound; past it, or on a
+//! sample the policy refused, [`Silence`] says to take the quote off the book
+//! (FR-014). The bound is a deployment setting and must be shorter than the
+//! vault's own freshness limit — [`Silence::checked`] refuses one that is not.
 //!
 //! # A hung socket is bounded, not detected
 //!
@@ -56,9 +65,9 @@ use std::collections::HashMap;
 use std::fmt::{self, Write as _};
 use std::io::{BufRead, BufReader};
 use std::str::FromStr;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Receiver, RecvError, RecvTimeoutError, Sender};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use propamm_quote::BPS_DENOM;
 use serde::Deserialize;
@@ -757,6 +766,296 @@ impl<S: Stream, C: Clock> Reader<S, C> {
     }
 }
 
+// ─── Silence: withdrawing the quote (FR-014) ────────────────────────────────
+
+/// Nominal length of a Solana slot.
+///
+/// Used in one place only: refusing a silence bound that is not shorter than
+/// the on-chain freshness limit (see [`Silence::checked`]). Nothing at runtime
+/// converts slots into seconds — the chain's clock is the slot itself, and a
+/// real slot drifts around this figure.
+pub const SLOT_DURATION: Duration = Duration::from_millis(400);
+
+/// A silence bound that cannot do its job.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum SilenceConfigError {
+    #[error("the silence bound is zero: the quote would be withdrawn before the first price")]
+    Zero,
+    #[error(
+        "the silence bound of {silence_ms} ms is not shorter than the on-chain freshness limit \
+         of {slots} slots (≈{freshness_ms} ms): the quote would go stale on chain before the \
+         engine noticed the feed had stopped"
+    )]
+    NotShorterThanFreshness {
+        silence_ms: u128,
+        slots: u32,
+        freshness_ms: u128,
+    },
+}
+
+/// Why the quote has to come off the book.
+///
+/// Every variant means the same thing to the tick: post a withdrawal, do not
+/// repeat the last known price (FR-014). They differ only in what goes in the log.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum Withdrawal {
+    #[error("no usable price for {silent_ms} ms, bound {bound_ms} ms")]
+    Silent { silent_ms: u128, bound_ms: u128 },
+    #[error("the feed is alive but the price is not usable: {reason}")]
+    Unusable { id: PriceId, reason: Reject },
+    #[error("the feed reader is gone")]
+    ReaderGone,
+}
+
+/// What the feed says about the quote right now.
+///
+/// Edge-triggered: a withdrawal is reported once, and the next report comes
+/// only when a usable price returns. Prices, on the other hand, are reported
+/// every time — whether a fresh price is worth a transaction is the update
+/// rule's decision (FR-011, T031), not the feed's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuoteState {
+    /// A usable price: the quote may stand, refreshed to this one.
+    Live(Price),
+    /// Take the quote off the book.
+    Withdrawn(Withdrawal),
+}
+
+/// The state behind FR-014, as a fold over [`FeedEvent`]s and the passage of time.
+///
+/// # What counts as the feed being alive
+///
+/// Only an accepted [`Price`]. A connect, a disconnect or a rejected sample
+/// carry no price, so none of them restarts the silence clock: the engine's
+/// question is not "is the socket open" but "do I have a price I may quote on".
+///
+/// # Why a rejection withdraws at once and a disconnect does not
+///
+/// A rejected sample is the feed telling us this price is unusable *now* —
+/// stale, wider than the confidence bound, or non-positive. Those are exactly
+/// the moments a market maker gets picked off for quoting the last known mid,
+/// so the quote goes off the book immediately.
+///
+/// A disconnect says nothing about the price: a reconnect takes a backoff
+/// pause, and withdrawing on every blip would mean two transactions per flap.
+/// It is covered by the silence bound, which the disconnect never reset.
+///
+/// [`Reject::NotNewer`] is the one rejection that is not a fault: it is the
+/// same sample again after a reconnect, and we already judged it. It neither
+/// refreshes the clock nor withdraws.
+///
+/// # The clock
+///
+/// Time comes in as a monotonic [`Duration`] since some origin the caller
+/// keeps — [`Watch`] uses an [`Instant`]. That keeps this type pure and its
+/// tests free of sleeps.
+#[derive(Debug, Clone, Copy)]
+pub struct Silence {
+    bound: Duration,
+    /// Monotonic instant from which there has been no usable price.
+    since: Duration,
+    state: State,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum State {
+    /// No price yet, and nothing has been withdrawn — a quote from an earlier
+    /// run of the engine may still be on the book.
+    Pending,
+    /// A price has passed; the quote may stand.
+    Live,
+    /// The withdrawal has been reported; there is nothing more to do until a
+    /// usable price returns.
+    Withdrawn,
+}
+
+impl Silence {
+    /// A bound with no cross-check. Prefer [`Silence::checked`].
+    #[must_use]
+    pub const fn new(bound: Duration) -> Self {
+        Self {
+            bound,
+            since: Duration::ZERO,
+            state: State::Pending,
+        }
+    }
+
+    /// The same, refusing a bound that cannot protect the quote.
+    ///
+    /// `max_quote_age_slots` is the vault's freshness limit (FR-007). If the
+    /// engine were allowed to stay quiet for that long, the quote would expire
+    /// on chain — the AMM would drop out of routes on its own — before the
+    /// engine ever decided the feed had stopped. That is the same failure
+    /// FR-011a refuses for the heartbeat, one level up.
+    ///
+    /// # Errors
+    ///
+    /// [`SilenceConfigError`] — a zero bound, or one not shorter than the
+    /// freshness limit.
+    pub fn checked(bound: Duration, max_quote_age_slots: u32) -> Result<Self, SilenceConfigError> {
+        if bound.is_zero() {
+            return Err(SilenceConfigError::Zero);
+        }
+        let freshness = SLOT_DURATION.saturating_mul(max_quote_age_slots);
+        if bound >= freshness {
+            return Err(SilenceConfigError::NotShorterThanFreshness {
+                silence_ms: bound.as_millis(),
+                slots: max_quote_age_slots,
+                freshness_ms: freshness.as_millis(),
+            });
+        }
+        Ok(Self::new(bound))
+    }
+
+    /// Start the silence clock at `now` instead of at zero.
+    #[must_use]
+    pub const fn started_at(mut self, now: Duration) -> Self {
+        self.since = now;
+        self
+    }
+
+    /// The bound itself.
+    #[must_use]
+    pub const fn bound(&self) -> Duration {
+        self.bound
+    }
+
+    /// Is there a usable price behind the quote right now?
+    #[must_use]
+    pub fn is_live(&self) -> bool {
+        self.state == State::Live
+    }
+
+    /// Fold one feed event in at monotonic instant `now`.
+    ///
+    /// `None` means the event changes nothing the tick has to act on.
+    pub fn observe(&mut self, now: Duration, event: &FeedEvent) -> Option<QuoteState> {
+        match event {
+            FeedEvent::Price(price) => {
+                self.since = now;
+                self.state = State::Live;
+                Some(QuoteState::Live(*price))
+            }
+            // The same sample twice after a reconnect: no news, no fault.
+            FeedEvent::Rejected {
+                reason: Reject::NotNewer { .. },
+                ..
+            } => None,
+            FeedEvent::Rejected { id, reason } => self.withdraw(Withdrawal::Unusable {
+                id: *id,
+                reason: *reason,
+            }),
+            FeedEvent::Connected | FeedEvent::Disconnected { .. } => None,
+        }
+    }
+
+    /// Nothing has arrived by `now`.
+    ///
+    /// The quote stands while a usable price is *younger* than the bound, so a
+    /// silence of exactly the bound withdraws. (The FR-012 limits in [`Policy`]
+    /// are inclusive; here the timer wakes exactly on the bound, and an
+    /// inclusive bound would only buy a spin through the loop.)
+    pub fn tick(&mut self, now: Duration) -> Option<QuoteState> {
+        let silent = now.saturating_sub(self.since);
+        if silent < self.bound {
+            return None;
+        }
+        self.withdraw(Withdrawal::Silent {
+            silent_ms: silent.as_millis(),
+            bound_ms: self.bound.as_millis(),
+        })
+    }
+
+    /// The reader thread ended: there will be no further events at all.
+    pub fn reader_gone(&mut self) -> Option<QuoteState> {
+        self.withdraw(Withdrawal::ReaderGone)
+    }
+
+    /// How long the caller may block before [`Silence::tick`] would withdraw.
+    ///
+    /// `None` once the quote is already off the book: there is no deadline to
+    /// keep, only a price to wait for.
+    #[must_use]
+    pub fn deadline(&self, now: Duration) -> Option<Duration> {
+        if self.state == State::Withdrawn {
+            return None;
+        }
+        Some(self.bound.saturating_sub(now.saturating_sub(self.since)))
+    }
+
+    /// Report a withdrawal once; a second reason while the quote is already off
+    /// the book is not news.
+    fn withdraw(&mut self, reason: Withdrawal) -> Option<QuoteState> {
+        if self.state == State::Withdrawn {
+            return None;
+        }
+        self.state = State::Withdrawn;
+        warn!(%reason, "withdrawing the quote");
+        Some(QuoteState::Withdrawn(reason))
+    }
+}
+
+/// [`Silence`] driven by a real clock and the reader's channel.
+///
+/// This is the shell around the state machine, and the tick's whole view of the
+/// feed: block in [`Watch::recv`] until there is something to do with the quote.
+#[derive(Debug)]
+pub struct Watch {
+    silence: Silence,
+    origin: Instant,
+}
+
+impl Watch {
+    /// The silence clock starts now — before the first price, not after it.
+    #[must_use]
+    pub fn new(silence: Silence) -> Self {
+        Self {
+            silence: silence.started_at(Duration::ZERO),
+            origin: Instant::now(),
+        }
+    }
+
+    /// The bound this watch keeps.
+    #[must_use]
+    pub const fn bound(&self) -> Duration {
+        self.silence.bound()
+    }
+
+    /// Is there a usable price behind the quote right now?
+    #[must_use]
+    pub fn is_live(&self) -> bool {
+        self.silence.is_live()
+    }
+
+    /// Block until the quote has to change, draining the feed's own events.
+    ///
+    /// `None` means the reader is gone *and* the quote is already off the book —
+    /// the tick has nothing left to wait for.
+    pub fn recv(&mut self, rx: &Receiver<FeedEvent>) -> Option<QuoteState> {
+        loop {
+            if let Some(state) = self.silence.tick(self.origin.elapsed()) {
+                return Some(state);
+            }
+            let event = match self.silence.deadline(self.origin.elapsed()) {
+                Some(budget) => match rx.recv_timeout(budget) {
+                    Ok(event) => event,
+                    // The bound has run out; the next tick turns it into a withdrawal.
+                    Err(RecvTimeoutError::Timeout) => continue,
+                    Err(RecvTimeoutError::Disconnected) => return self.silence.reader_gone(),
+                },
+                // Already withdrawn: no deadline to keep, only a price to wait for.
+                None => match rx.recv() {
+                    Ok(event) => event,
+                    Err(RecvError) => return self.silence.reader_gone(),
+                },
+            };
+            if let Some(state) = self.silence.observe(self.origin.elapsed(), &event) {
+                return Some(state);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::VecDeque;
@@ -1257,5 +1556,216 @@ mod tests {
         let events = collect(reader);
         assert_eq!(events.len(), 1, "{events:#?}");
         assert_eq!(seen_key.lock().unwrap().as_deref(), Some("secret"));
+    }
+
+    // ─── Silence (FR-014) ───
+
+    fn ms(n: u64) -> Duration {
+        Duration::from_millis(n)
+    }
+
+    /// Two seconds of patience, the clock starting at zero.
+    fn silence() -> Silence {
+        Silence::new(Duration::from_secs(2))
+    }
+
+    fn price_event(publish_time: i64) -> FeedEvent {
+        FeedEvent::Price(Price {
+            publish_time,
+            ..accepted(15_000_000_000, -8)
+        })
+    }
+
+    fn rejected(reason: Reject) -> FeedEvent {
+        FeedEvent::Rejected {
+            id: id(SOL_USD),
+            reason,
+        }
+    }
+
+    #[test]
+    fn a_price_puts_the_quote_on_the_book_and_restarts_the_silence_clock() {
+        let mut silence = silence();
+        assert!(!silence.is_live());
+        assert_eq!(
+            silence.observe(ms(1_500), &price_event(NOW)),
+            Some(QuoteState::Live(Price {
+                publish_time: NOW,
+                ..accepted(15_000_000_000, -8)
+            }))
+        );
+        assert!(silence.is_live());
+        // The clock now runs from 1 500 ms, so 3 000 ms absolute is 1 500 ms of silence.
+        assert_eq!(silence.tick(ms(3_000)), None);
+        assert_eq!(silence.deadline(ms(3_000)), Some(ms(500)));
+    }
+
+    #[test]
+    fn silence_past_the_bound_withdraws_the_quote_exactly_once() {
+        let mut silence = silence();
+        silence.observe(ms(0), &price_event(NOW));
+        assert_eq!(silence.tick(ms(1_999)), None, "still within the bound");
+        assert_eq!(
+            silence.tick(ms(2_000)),
+            Some(QuoteState::Withdrawn(Withdrawal::Silent {
+                silent_ms: 2_000,
+                bound_ms: 2_000
+            })),
+            "the bound itself is silence, not freshness"
+        );
+        assert!(!silence.is_live());
+        assert_eq!(
+            silence.tick(ms(9_000)),
+            None,
+            "withdrawn once, not per tick"
+        );
+    }
+
+    #[test]
+    fn silence_before_the_first_price_withdraws_too() {
+        // A quote left on the book by an earlier run of the engine is exactly
+        // the one nobody is watching; it has to come off like any other.
+        let mut silence = silence();
+        assert!(matches!(
+            silence.tick(ms(2_000)),
+            Some(QuoteState::Withdrawn(Withdrawal::Silent { .. }))
+        ));
+    }
+
+    #[test]
+    fn a_rejected_sample_withdraws_the_quote_at_once() {
+        let mut silence = silence();
+        silence.observe(ms(0), &price_event(NOW));
+        let reason = Reject::WideConfidence {
+            conf_bps: 120,
+            limit_bps: 30,
+        };
+        assert_eq!(
+            silence.observe(ms(10), &rejected(reason)),
+            Some(QuoteState::Withdrawn(Withdrawal::Unusable {
+                id: id(SOL_USD),
+                reason
+            })),
+            "a live feed with an unusable price is not a reason to keep quoting"
+        );
+        assert_eq!(
+            silence.observe(ms(20), &rejected(reason)),
+            None,
+            "the second rejection is not news"
+        );
+    }
+
+    #[test]
+    fn a_replayed_sample_after_a_reconnect_neither_refreshes_nor_withdraws() {
+        let mut silence = silence();
+        silence.observe(ms(0), &price_event(NOW));
+        let replay = rejected(Reject::NotNewer {
+            publish_time: NOW,
+            previous: NOW,
+        });
+        assert_eq!(silence.observe(ms(1_000), &replay), None);
+        assert!(silence.is_live(), "a replay is not a fault");
+        assert_eq!(
+            silence.deadline(ms(1_000)),
+            Some(ms(1_000)),
+            "and it does not buy another two seconds either"
+        );
+    }
+
+    #[test]
+    fn a_reconnect_does_not_withdraw_and_does_not_stop_the_clock() {
+        let mut silence = silence();
+        silence.observe(ms(0), &price_event(NOW));
+        let blip = FeedEvent::Disconnected {
+            reason: "the server closed the stream".to_owned(),
+        };
+        assert_eq!(silence.observe(ms(500), &blip), None);
+        assert_eq!(silence.observe(ms(600), &FeedEvent::Connected), None);
+        assert!(
+            silence.is_live(),
+            "a blip shorter than the bound is not silence"
+        );
+        assert!(
+            matches!(
+                silence.tick(ms(2_000)),
+                Some(QuoteState::Withdrawn(Withdrawal::Silent { .. }))
+            ),
+            "but the reconnect did not reset the clock either"
+        );
+    }
+
+    #[test]
+    fn a_price_after_a_withdrawal_brings_the_quote_back() {
+        let mut silence = silence();
+        silence.tick(ms(2_000));
+        assert_eq!(
+            silence.deadline(ms(2_000)),
+            None,
+            "nothing left to wait out"
+        );
+        assert!(matches!(
+            silence.observe(ms(2_500), &price_event(NOW + 1)),
+            Some(QuoteState::Live(_))
+        ));
+        assert_eq!(silence.deadline(ms(2_500)), Some(ms(2_000)));
+    }
+
+    #[test]
+    fn a_silence_bound_that_cannot_protect_the_quote_is_refused() {
+        // 25 slots ≈ 10 000 ms of on-chain freshness.
+        assert!(Silence::checked(Duration::from_secs(2), 25).is_ok());
+        assert!(matches!(
+            Silence::checked(Duration::ZERO, 25),
+            Err(SilenceConfigError::Zero)
+        ));
+        assert!(
+            matches!(
+                Silence::checked(Duration::from_secs(10), 25),
+                Err(SilenceConfigError::NotShorterThanFreshness {
+                    silence_ms: 10_000,
+                    slots: 25,
+                    freshness_ms: 10_000,
+                })
+            ),
+            "equal is not shorter"
+        );
+    }
+
+    // ─── Watch: the state machine on a real clock and channel ───
+
+    #[test]
+    fn the_watch_hands_over_a_price_and_then_withdraws_on_silence() {
+        let (tx, rx) = mpsc::channel();
+        let mut watch = Watch::new(Silence::new(ms(80)));
+        tx.send(FeedEvent::Connected).expect("the watch is alive");
+        tx.send(price_event(NOW)).expect("the watch is alive");
+
+        assert!(matches!(watch.recv(&rx), Some(QuoteState::Live(_))));
+        let started = Instant::now();
+        let withdrawal = watch.recv(&rx);
+        assert!(
+            matches!(
+                withdrawal,
+                Some(QuoteState::Withdrawn(Withdrawal::Silent { .. }))
+            ),
+            "{withdrawal:?}"
+        );
+        assert!(started.elapsed() >= ms(80), "it withdrew before the bound");
+        // The sender is still alive: the watch waits for a price, not for a deadline.
+        assert!(!watch.is_live());
+    }
+
+    #[test]
+    fn the_watch_reports_the_reader_going_away_and_then_has_nothing_left() {
+        let (tx, rx) = mpsc::channel();
+        let mut watch = Watch::new(Silence::new(Duration::from_secs(30)));
+        tx.send(price_event(NOW)).expect("the watch is alive");
+        assert!(matches!(watch.recv(&rx), Some(QuoteState::Live(_))));
+        drop(tx);
+        assert_eq!(
+            watch.recv(&rx),
+            Some(QuoteState::Withdrawn(Withdrawal::ReaderGone))
+        );
+        assert_eq!(watch.recv(&rx), None, "nothing left to wait for");
     }
 }

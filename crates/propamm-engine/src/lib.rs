@@ -10,7 +10,9 @@
 //!
 //! What is here so far:
 //!
-//! - [`feed`] — Pyth Hermes over SSE with the timestamp and confidence check (FR-012).
+//! - [`feed`] — Pyth Hermes over SSE with the timestamp and confidence check
+//!   (FR-012), and the silence rule that withdraws the quote instead of
+//!   repeating the last known price (FR-014).
 
 #![forbid(unsafe_code)]
 
