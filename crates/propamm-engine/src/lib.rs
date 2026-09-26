@@ -13,8 +13,9 @@
 //! - [`feed`] — Pyth Hermes over SSE with the timestamp and confidence check
 //!   (FR-012), and the silence rule that withdraws the quote instead of
 //!   repeating the last known price (FR-014).
-//! - [`model`] — the pricing model, the engine's one replaceable point (FR-015);
-//!   so far the built-in spread-and-skew one (FR-013).
+//! - [`model`] — the pricing model, the engine's one replaceable point (FR-015):
+//!   the [`model::PricingModel`] trait, the built-in spread-and-skew model
+//!   (FR-013), and a model in another process over stdin/stdout (FR-015a).
 
 #![forbid(unsafe_code)]
 

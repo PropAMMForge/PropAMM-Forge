@@ -33,36 +33,12 @@
 //! the bound — the same, clamped. Tying the model to the same number the program
 //! guards means the two cannot disagree about what "too far" is.
 
+use std::time::Instant;
+
 use propamm_quote::{inventory_skew_bps, Inventory, QuoteError, BPS_DENOM, PRICE_SCALE};
 use thiserror::Error;
 
-/// What the core hands the model (FR-015).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MarketState {
-    /// The mid from the feed, in [`PRICE_SCALE`]: raw quote per raw base × 1e9.
-    pub mid_e9: u128,
-    /// What the vault holds right now.
-    pub inventory: Inventory,
-    /// The vault's hard inventory bound (FR-026) — the scale skew is measured against.
-    pub max_skew_bps: u16,
-}
-
-/// What the model gives back: the four fields of the quote the engine may move.
-///
-/// The other fields of `QuoteParams` are the deployment's, not the model's: the
-/// freshness limit and the hard skew bound are risk settings the owner sets, and
-/// `quote_slot` is the chain's.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Quote {
-    /// The market mid, in [`PRICE_SCALE`].
-    pub mid_e9: u128,
-    /// Half of the spread, in basis points.
-    pub spread_bps: u16,
-    /// Mid shift by inventory skew: positive raises both sides.
-    pub skew_bps: i16,
-    /// Largest order the vault will take, in raw units of the base asset (FR-008).
-    pub max_size_base: u64,
-}
+use super::{Decision, MarketState, ModelError, PricingModel, Quote};
 
 /// A model configuration that cannot do its job.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
@@ -239,6 +215,16 @@ impl SpreadSkewModel {
             .ok_or(QuoteError::Overflow)?
             / u128::from(BPS_DENOM);
         Ok(u64::try_from(size).unwrap_or(u64::MAX))
+    }
+}
+
+/// In-process, so the deadline has nothing to bound: the call is a few integer
+/// operations, and whether that was fast enough is for the tick to measure
+/// (FR-015b). The model never withdraws — it has no view of the market beyond
+/// the state it is given, and the core already withdraws on a silent feed.
+impl PricingModel for SpreadSkewModel {
+    fn price(&mut self, state: &MarketState, _deadline: Instant) -> Result<Decision, ModelError> {
+        Ok(Decision::Quote(self.quote(state)?))
     }
 }
 
