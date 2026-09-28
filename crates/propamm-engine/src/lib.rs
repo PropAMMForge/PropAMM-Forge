@@ -16,8 +16,11 @@
 //! - [`model`] — the pricing model, the engine's one replaceable point (FR-015):
 //!   the [`model::PricingModel`] trait, the built-in spread-and-skew model
 //!   (FR-013), and a model in another process over stdin/stdout (FR-015a).
+//! - [`tick`] — the model behind a response budget: a late answer skips the
+//!   tick with the reason recorded instead of posting a stale price (FR-015b).
 
 #![forbid(unsafe_code)]
 
 pub mod feed;
 pub mod model;
+pub mod tick;
