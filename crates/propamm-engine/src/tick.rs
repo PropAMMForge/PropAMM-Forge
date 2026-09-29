@@ -89,7 +89,7 @@ impl Budget {
     /// `max_quote_age_slots` is the vault's freshness limit (FR-007): a model
     /// allowed to think for that long could hand back a price the program
     /// would already refuse as stale. The tighter bound — the budget against
-    /// the heartbeat interval — belongs to the update rule (FR-011a, T031).
+    /// the heartbeat interval — is [`Rule::checked`](crate::policy::Rule::checked) (FR-011a).
     ///
     /// # Errors
     ///
@@ -132,7 +132,7 @@ pub enum Skip {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Step {
     /// Post this quote — whether it is worth a transaction is the update rule's
-    /// decision (FR-011, T031).
+    /// decision ([`crate::policy`], FR-011).
     Post(Quote),
     /// Take the quote off the book (the model's own [`Decision::Withdraw`]).
     Withdraw { reason: String },

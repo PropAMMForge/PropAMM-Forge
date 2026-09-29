@@ -18,9 +18,13 @@
 //!   (FR-013), and a model in another process over stdin/stdout (FR-015a).
 //! - [`tick`] — the model behind a response budget: a late answer skips the
 //!   tick with the reason recorded instead of posting a stale price (FR-015b).
+//! - [`policy`] — the hybrid update rule: post when a side moved past the
+//!   threshold or the heartbeat is up (FR-011), and refuse a heartbeat whose
+//!   replacement would land after the quote it replaces has expired (FR-011a).
 
 #![forbid(unsafe_code)]
 
 pub mod feed;
 pub mod model;
+pub mod policy;
 pub mod tick;

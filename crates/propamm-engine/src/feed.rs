@@ -812,7 +812,7 @@ pub enum Withdrawal {
 /// Edge-triggered: a withdrawal is reported once, and the next report comes
 /// only when a usable price returns. Prices, on the other hand, are reported
 /// every time — whether a fresh price is worth a transaction is the update
-/// rule's decision (FR-011, T031), not the feed's.
+/// rule's decision ([`crate::policy`], FR-011), not the feed's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuoteState {
     /// A usable price: the quote may stand, refreshed to this one.
