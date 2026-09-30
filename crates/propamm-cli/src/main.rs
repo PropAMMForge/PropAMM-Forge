@@ -13,8 +13,8 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use propamm_cli::amount::{format_mid_e9, format_raw, Decimal};
 use propamm_cli::config::{Cluster, DEFAULT_MAX_QUOTE_AGE_SLOTS, DEFAULT_MAX_SKEW_BPS};
-use propamm_cli::rpc::Confirmed;
 use propamm_cli::{deploy, fund, init, quote, status};
+use propamm_client::rpc::Confirmed;
 
 #[derive(Parser)]
 #[command(

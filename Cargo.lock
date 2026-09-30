@@ -2632,21 +2632,33 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "anyhow",
- "base64 0.22.1",
  "bincode",
  "clap",
  "dirs",
+ "propamm-client",
  "propamm-quote",
  "propamm-vault",
  "serde",
- "serde_json",
- "solana-hash 3.1.0",
  "solana-keypair",
  "solana-message 3.1.0",
  "solana-signer",
  "solana-transaction 3.1.0",
  "tempfile",
  "toml 1.1.5+spec-1.1.0",
+]
+
+[[package]]
+name = "propamm-client"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "anyhow",
+ "base64 0.22.1",
+ "propamm-vault",
+ "serde_json",
+ "solana-hash 3.1.0",
+ "solana-keypair",
  "ureq",
 ]
 
@@ -2659,6 +2671,7 @@ dependencies = [
  "anyhow",
  "bincode",
  "propamm-cli",
+ "propamm-client",
  "propamm-vault",
  "serde_json",
  "solana-keypair",
@@ -2672,9 +2685,21 @@ dependencies = [
 name = "propamm-engine"
 version = "0.1.0"
 dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "anyhow",
+ "base64 0.22.1",
+ "bincode",
+ "propamm-client",
  "propamm-quote",
+ "propamm-vault",
  "serde",
  "serde_json",
+ "solana-hash 3.1.0",
+ "solana-keypair",
+ "solana-message 3.1.0",
+ "solana-signer",
+ "solana-transaction 3.1.0",
  "thiserror 2.0.20",
  "tracing",
  "ureq",

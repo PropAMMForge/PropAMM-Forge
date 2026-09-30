@@ -8,8 +8,8 @@
 
 use anchor_lang::prelude::Pubkey;
 use anyhow::{Context, Result};
-use propamm_cli::chain::{associated_token_address, MintInfo};
-use propamm_cli::rpc::Rpc;
+use propamm_client::chain::{associated_token_address, MintInfo};
+use propamm_client::rpc::Rpc;
 use solana_keypair::Keypair;
 use solana_signer::Signer as _;
 

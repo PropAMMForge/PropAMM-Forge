@@ -23,12 +23,13 @@ use std::path::PathBuf;
 
 use anchor_lang::prelude::Pubkey;
 use anyhow::{bail, Context, Result};
+use propamm_client::chain::{
+    associated_token_address, decode_token_account, deposit_ix, MintInfo, NATIVE_MINT,
+};
+use propamm_client::rpc::Confirmed;
 
 use crate::amount::{format_raw, Decimal};
-use crate::chain::{
-    associated_token_address, decode_token_account, deposit_ix, MintInfo, Session, NATIVE_MINT,
-};
-use crate::rpc::Confirmed;
+use crate::chain::Session;
 
 /// The side of the pair being funded.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, clap::ValueEnum)]

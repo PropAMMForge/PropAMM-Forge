@@ -1,0 +1,32 @@
+[package]
+name = "propamm-client"
+description = "The vault program from off chain: a thin JSON-RPC client, instruction builders, account decoders"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# One copy for `forge` and the engine (T032 decision): both send the same
+# instructions and read the same accounts, and a second copy of the
+# discriminators and the byte offsets would be checked only against itself.
+#
+# The whole crate lives on THIRD-generation solana crates — the same ones as
+# anchor-lang — so `Pubkey` and `Instruction` are one type here and in both users.
+[dependencies]
+anchor-lang.workspace = true
+anchor-spl.workspace = true
+anyhow.workspace = true
+base64.workspace = true
+serde_json.workspace = true
+solana-hash.workspace = true
+solana-keypair.workspace = true
+
+# Transport. `ureq` with rustls rather than system TLS: the build has to pass the
+# same way in WSL and on Windows, and `openssl-sys` is the most common reason it
+# does not pass everywhere.
+ureq = { workspace = true, features = ["json"] }
+
+# For the program `ID`, the state types and the instruction data. `no-entrypoint`
+# is mandatory — otherwise the crate pulls the BPF entry point into the host build.
+propamm-vault = { path = "../../programs/propamm-vault", features = ["no-entrypoint"] }

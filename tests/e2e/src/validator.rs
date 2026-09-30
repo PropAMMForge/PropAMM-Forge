@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use anchor_lang::prelude::Pubkey;
 use anyhow::{bail, Context, Result};
-use propamm_cli::rpc::Rpc;
+use propamm_client::rpc::Rpc;
 
 use crate::{RPC_PORT, RPC_URL};
 

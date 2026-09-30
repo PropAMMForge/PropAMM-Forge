@@ -22,3 +22,25 @@ tracing.workspace = true
 # an SSE stream is an ordinary HTTP body read line by line, and a second HTTP
 # stack — async, with its own TLS — would be a second open version range in the lock.
 ureq.workspace = true
+
+# The vault on chain: the node client, the `update_quote`/`clear_quote` builders
+# and the account decoders are the same ones `forge` uses (T032 decision) — one
+# copy of the discriminators and the offsets. `propamm-vault` gives the error
+# codes a refusal is classified by, taken from the program rather than restated.
+propamm-client.workspace = true
+propamm-vault = { path = "../../programs/propamm-vault", features = ["no-entrypoint"] }
+anchor-lang.workspace = true
+anyhow.workspace = true
+
+# Signing with `pricing_authority`. Third-generation solana crates — the same as
+# anchor-lang and the client — so `Pubkey`, `Instruction` and `Message` are one type.
+bincode.workspace = true
+solana-hash.workspace = true
+solana-keypair.workspace = true
+solana-message.workspace = true
+solana-signer.workspace = true
+solana-transaction.workspace = true
+
+[dev-dependencies]
+anchor-spl.workspace = true
+base64.workspace = true

@@ -10,8 +10,8 @@
 use anchor_lang::prelude::Pubkey;
 use anchor_lang::{InstructionData, ToAccountMetas};
 use anyhow::{Context, Result};
-use propamm_cli::chain::{associated_token_address, decode_token_account, MintInfo};
-use propamm_cli::rpc::{Confirmed, Rpc};
+use propamm_client::chain::{associated_token_address, decode_token_account, MintInfo};
+use propamm_client::rpc::{Confirmed, Rpc};
 use propamm_vault::instructions::swap::{SwapArgs, SwapSide};
 use propamm_vault::state::Vault;
 use solana_keypair::Keypair;

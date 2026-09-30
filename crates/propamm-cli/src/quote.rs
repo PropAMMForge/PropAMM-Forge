@@ -27,13 +27,14 @@ use std::path::PathBuf;
 
 use anchor_lang::prelude::Pubkey;
 use anyhow::{bail, Context, Result};
+use propamm_client::chain::{clear_quote_ix, read_keypair, update_quote_ix, MintInfo};
+use propamm_client::rpc::Confirmed;
 use propamm_quote::{side_price_e9, QuoteParams};
 use solana_keypair::Keypair;
 use solana_signer::Signer as _;
 
 use crate::amount::Decimal;
-use crate::chain::{clear_quote_ix, read_keypair, update_quote_ix, MintInfo, Session};
-use crate::rpc::Confirmed;
+use crate::chain::Session;
 
 /// How the market mid is given.
 #[derive(Clone, Copy, Debug)]

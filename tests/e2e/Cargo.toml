@@ -26,10 +26,12 @@ solana-signer.workspace = true
 solana-transaction.workspace = true
 tempfile.workspace = true
 
-# The node client and the instruction builders come from the CLI rather than being
+# The node client and the instruction builders are the product's own rather than
 # written a second time: a test that went to the network with its own copy of the
-# same offsets and discriminators would be checking itself.
+# same offsets and discriminators would be checking itself. The CLI itself is here
+# for its config types; `forge` runs as a process.
 propamm-cli = { path = "../../crates/propamm-cli" }
+propamm-client.workspace = true
 
 # `no-entrypoint` is mandatory: without it the crate pulls the BPF entry point
 # into the host build. The .so from `target/deploy` is what executes; only the types,

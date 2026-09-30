@@ -59,8 +59,16 @@ pub struct Http {
 impl Http {
     #[must_use]
     pub fn new() -> Self {
+        Self::with_timeout(REQUEST_TIMEOUT)
+    }
+
+    /// The same with a different bound on each request. A person at `forge`
+    /// can wait half a minute; the engine cannot — a hung request holds the
+    /// whole loop, withdrawals included.
+    #[must_use]
+    pub fn with_timeout(timeout: Duration) -> Self {
         let config = ureq::Agent::config_builder()
-            .timeout_global(Some(REQUEST_TIMEOUT))
+            .timeout_global(Some(timeout))
             .build();
         Self {
             agent: config.into(),
@@ -104,6 +112,37 @@ pub struct Confirmed {
     pub signature: String,
     pub slot: u64,
 }
+
+/// Accounts together with the slot the node read them at.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Snapshot {
+    pub slot: u64,
+    pub accounts: Vec<Option<Account>>,
+}
+
+/// The node answered with a JSON-RPC error.
+///
+/// Callers that act on the cause — the engine tells a refusal it can retry
+/// from one it cannot — find it by downcasting the `anyhow::Error`; `Display`
+/// is the readable form `forge` prints.
+#[derive(Clone, PartialEq, Debug)]
+pub struct NodeError {
+    pub method: String,
+    pub code: i64,
+    pub message: String,
+    /// `data.err` — the `TransactionError` of a failed preflight.
+    pub err: Option<Value>,
+    /// `data.logs` — the program logs of a failed preflight.
+    pub logs: Vec<String>,
+}
+
+impl std::fmt::Display for NodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&describe_rpc_error(self))
+    }
+}
+
+impl std::error::Error for NodeError {}
 
 /// The node client.
 pub struct Rpc {
@@ -179,10 +218,28 @@ impl Rpc {
         if addresses.is_empty() {
             return Ok(Vec::new());
         }
+        Ok(self.multiple_accounts(addresses, "confirmed")?.accounts)
+    }
+
+    /// Several accounts as the tip of the chain has them, with the slot.
+    ///
+    /// `processed`, not `confirmed`: the engine anchors its slot clock on this
+    /// read, and the chain stamps a quote with the slot it executes in — the
+    /// tip. A clock that ran a slot or two behind would make the heartbeat late
+    /// by as much (see `propamm-engine`).
+    ///
+    /// # Errors
+    ///
+    /// If the call failed or the node returned a different number of accounts.
+    pub fn get_multiple_accounts_at_tip(&self, addresses: &[Pubkey]) -> Result<Snapshot> {
+        self.multiple_accounts(addresses, "processed")
+    }
+
+    fn multiple_accounts(&self, addresses: &[Pubkey], commitment: &str) -> Result<Snapshot> {
         let keys: Vec<String> = addresses.iter().map(ToString::to_string).collect();
         let result = self.call(
             "getMultipleAccounts",
-            json!([keys, {"encoding": "base64", "commitment": "confirmed"}]),
+            json!([keys, {"encoding": "base64", "commitment": commitment}]),
         )?;
         let values = result["value"]
             .as_array()
@@ -194,7 +251,12 @@ impl Rpc {
                 values.len()
             );
         }
-        values.iter().map(parse_account).collect()
+        Ok(Snapshot {
+            slot: result["context"]["slot"]
+                .as_u64()
+                .context("getMultipleAccounts did not return a slot")?,
+            accounts: values.iter().map(parse_account).collect::<Result<_>>()?,
+        })
     }
 
     /// The current slot.
@@ -290,7 +352,7 @@ fn parse_response(method: &str, text: &str) -> Result<Value> {
         .with_context(|| format!("{method}: the response is not JSON: {}", head(text)))?;
 
     if let Some(error) = value.get("error") {
-        bail!("{}", describe_rpc_error(method, error));
+        return Err(node_error(method, error).into());
     }
     match value.get_mut("result") {
         Some(result) => Ok(result.take()),
@@ -323,21 +385,40 @@ const LOG_TAIL: usize = 25;
 /// its location is worse than no filter. So the tail is shown whole, and the
 /// error code is not translated into a name: a lookup table in the CLI would
 /// diverge from the program on the first new code, while the log comes from the program itself.
-fn describe_rpc_error(method: &str, error: &Value) -> String {
-    let message = error["message"].as_str().unwrap_or("unknown error");
-    let mut text = format!("{method}: {message}");
-    if let Some(logs) = error["data"]["logs"].as_array() {
-        let lines: Vec<&str> = logs.iter().filter_map(Value::as_str).collect();
-        let skipped = lines.len().saturating_sub(LOG_TAIL);
-        if skipped > 0 {
-            let _ = write!(text, "\n    … {skipped} more log lines above");
-        }
-        for line in &lines[skipped..] {
-            text.push_str("\n    ");
-            text.push_str(line);
-        }
+fn describe_rpc_error(error: &NodeError) -> String {
+    let mut text = format!("{}: {}", error.method, error.message);
+    let skipped = error.logs.len().saturating_sub(LOG_TAIL);
+    if skipped > 0 {
+        let _ = write!(text, "\n    … {skipped} more log lines above");
+    }
+    for line in &error.logs[skipped..] {
+        text.push_str("\n    ");
+        text.push_str(line);
     }
     text
+}
+
+/// The `error` object of a JSON-RPC response, kept whole.
+fn node_error(method: &str, error: &Value) -> NodeError {
+    let data = &error["data"];
+    NodeError {
+        method: method.to_string(),
+        code: error["code"].as_i64().unwrap_or_default(),
+        message: error["message"]
+            .as_str()
+            .unwrap_or("unknown error")
+            .to_string(),
+        err: data.get("err").filter(|err| !err.is_null()).cloned(),
+        logs: data["logs"]
+            .as_array()
+            .map(|logs| {
+                logs.iter()
+                    .filter_map(Value::as_str)
+                    .map(ToString::to_string)
+                    .collect()
+            })
+            .unwrap_or_default(),
+    }
 }
 
 /// Parse an account from the `value` field.
@@ -586,5 +667,45 @@ mod tests {
             body.find(&first.to_string()) < body.find(&second.to_string()),
             "{body}"
         );
+    }
+
+    /// The engine acts on the cause of a refusal, not on its wording: the
+    /// `TransactionError` and the logs have to survive as data.
+    #[test]
+    fn a_node_error_keeps_its_cause_as_data() {
+        let client = rpc(&[r#"{"jsonrpc":"2.0","id":1,"error":{
+            "code":-32002,
+            "message":"Transaction simulation failed: Blockhash not found",
+            "data":{"err":"BlockhashNotFound","logs":[]}
+        }}"#]);
+        let err = client.send_transaction(&[1]).unwrap_err();
+        let node = err
+            .downcast_ref::<NodeError>()
+            .expect("a node error must stay a NodeError");
+        assert_eq!(node.code, -32002);
+        assert_eq!(node.method, "sendTransaction");
+        assert_eq!(node.err, Some(json!("BlockhashNotFound")));
+        assert!(node.logs.is_empty());
+    }
+
+    /// A transport failure is not a node error — that difference is what the
+    /// engine retries on.
+    #[test]
+    fn a_transport_failure_is_not_a_node_error() {
+        let client = rpc(&[]);
+        let err = client.get_slot().unwrap_err();
+        assert!(err.downcast_ref::<NodeError>().is_none(), "{err}");
+    }
+
+    #[test]
+    fn a_snapshot_at_the_tip_carries_the_slot_and_asks_for_processed() {
+        let (client, transport) =
+            spy(&[r#"{"jsonrpc":"2.0","id":1,"result":{"context":{"slot":777},"value":[null]}}"#]);
+        let snapshot = client
+            .get_multiple_accounts_at_tip(&[Pubkey::new_unique()])
+            .unwrap();
+        assert_eq!(snapshot.slot, 777);
+        assert_eq!(snapshot.accounts, vec![None]);
+        assert!(transport.seen.borrow()[0].contains(r#""commitment":"processed""#));
     }
 }

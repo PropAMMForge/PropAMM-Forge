@@ -288,6 +288,19 @@ impl Rule {
     pub fn forget(&mut self) {
         self.last = Last::Unknown;
     }
+
+    /// The quote the rule last posted is on the book, stamped `quote_slot` by
+    /// the chain.
+    ///
+    /// The heartbeat then counts from the earlier of the two slots. Normally
+    /// that is the decision slot; it is the stamp when the same quote reached
+    /// the book before this post did — a repeat that landed late — and the
+    /// quote on chain is older than the rule thought (FR-011a).
+    pub fn landed_at(&mut self, quote_slot: u64) {
+        if let Last::Posted { slot, .. } = &mut self.last {
+            *slot = (*slot).min(quote_slot);
+        }
+    }
 }
 
 /// Bid and ask of `quote`, exactly as the program would derive them.
@@ -584,6 +597,24 @@ mod tests {
         assert!(rule.on_withdraw());
         rule.forget();
         assert!(rule.on_withdraw(), "a failed withdrawal is sent again");
+    }
+
+    /// The heartbeat counts from the chain's stamp when that is earlier — the
+    /// same quote landed before this post did — and never moves later.
+    #[test]
+    fn a_landing_stamp_can_only_bring_the_heartbeat_forward() {
+        let mut on_book = posted();
+        on_book.landed_at(101);
+        assert_eq!(on_book.due_slot(), Some(100 + u64::from(HEARTBEAT)));
+        on_book.landed_at(96);
+        assert_eq!(on_book.due_slot(), Some(96 + u64::from(HEARTBEAT)));
+
+        let mut fresh = rule();
+        fresh.landed_at(50);
+        assert_eq!(fresh.due_slot(), None, "nothing posted, nothing to move");
+        assert!(fresh.on_withdraw());
+        fresh.landed_at(50);
+        assert_eq!(fresh.due_slot(), None);
     }
 
     #[test]

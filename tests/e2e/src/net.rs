@@ -1,15 +1,15 @@
 //! What `forge` does not do but the run's preparation does: money from the
 //! faucet, rent and sending a transaction with an arbitrary key.
 //!
-//! The node client here is the same [`propamm_cli::rpc::Rpc`] as in the product.
+//! The node client here is the same [`propamm_client::rpc::Rpc`] as in the product.
 //! It already has the six methods the commands need; the four needed only by the
 //! preparation are deliberately not in it — they go through the open
-//! [`Rpc::call`](propamm_cli::rpc::Rpc::call), so as not to widen the CLI surface
+//! [`Rpc::call`](propamm_client::rpc::Rpc::call), so as not to widen the client surface
 //! for the sake of tests.
 
 use anchor_lang::prelude::Pubkey;
 use anyhow::{bail, Context, Result};
-use propamm_cli::rpc::{Confirmed, Rpc};
+use propamm_client::rpc::{Confirmed, Rpc};
 use serde_json::json;
 use solana_keypair::Keypair;
 use solana_signer::Signer as _;

@@ -89,6 +89,8 @@ for it is claimed anywhere, and inventing one would be a number off a shelf.
 | `programs/propamm-vault` | the Anchor program: vault state, quoting, swap, guards |
 | `crates/propamm-quote` | the quote math, shared by the program and every consumer |
 | `crates/propamm-cli` | `forge` — init, deploy, fund, quote, status |
+| `crates/propamm-client` | the node client, instruction builders and account decoders `forge` and the engine share |
+| `crates/propamm-engine` | the pricing engine: feed, model, update rule, sender, tick loop |
 | `packages/sdk` | TypeScript SDK: vendored IDL, instruction builders, event decoding |
 | `apps/web` | screen prototype of the console and the deployment wizard |
 | `tests/program` | instruction-level tests on Mollusk, plus the CU budget gate |
@@ -128,8 +130,10 @@ Program ID: `77Y9n3vWE2noN1u9PTshuWxdDRsrw9UMtejBypUD9wjq`.
 Named plainly, because a demo without this list creates a false impression of
 what has been proven:
 
-- **No pricing engine.** Quotes are posted by hand through `forge quote`. Feed
-  reading, the hybrid refresh rule and inventory-aware spreads are milestone M2.
+- **No runnable pricing engine.** Quotes are posted by hand through `forge quote`.
+  The engine's core — feed reading, the models, the hybrid refresh rule, the
+  sender and the tick loop — is a library tested on scripted input; the binary
+  and its measurement on a local network (SC-003) close milestone M2.
 - **No aggregator adapter and no router.** Integration and the local router twin
   are M3. Nothing here has been listed by a production router.
 - **No monitoring console on real data.** Event collection, P&L accounting and

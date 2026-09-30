@@ -821,6 +821,15 @@ pub enum QuoteState {
     Withdrawn(Withdrawal),
 }
 
+/// Why [`Watch::recv_until`] returned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Wake {
+    /// The feed has something for the quote.
+    Feed(QuoteState),
+    /// The caller's own deadline came first.
+    Timer,
+}
+
 /// The state behind FR-014, as a fold over [`FeedEvent`]s and the passage of time.
 ///
 /// # What counts as the feed being alive
@@ -1033,24 +1042,51 @@ impl Watch {
     /// the tick has nothing left to wait for.
     pub fn recv(&mut self, rx: &Receiver<FeedEvent>) -> Option<QuoteState> {
         loop {
-            if let Some(state) = self.silence.tick(self.origin.elapsed()) {
+            if let Wake::Feed(state) = self.recv_until(rx, None)? {
                 return Some(state);
             }
-            let event = match self.silence.deadline(self.origin.elapsed()) {
-                Some(budget) => match rx.recv_timeout(budget) {
+        }
+    }
+
+    /// The same, but also wake at `wake_at` — the loop has its own deadlines:
+    /// the heartbeat, a read of the book, the end of a pause.
+    ///
+    /// `None` as in [`Watch::recv`].
+    pub fn recv_until(
+        &mut self,
+        rx: &Receiver<FeedEvent>,
+        wake_at: Option<Instant>,
+    ) -> Option<Wake> {
+        loop {
+            if let Some(state) = self.silence.tick(self.origin.elapsed()) {
+                return Some(Wake::Feed(state));
+            }
+            let timer = wake_at.map(|at| at.saturating_duration_since(Instant::now()));
+            if timer == Some(Duration::ZERO) {
+                return Some(Wake::Timer);
+            }
+            // Already withdrawn: no silence deadline to keep, only a price to wait for.
+            let silence = self.silence.deadline(self.origin.elapsed());
+            let wait = match (silence, timer) {
+                (Some(silence), Some(timer)) => Some(silence.min(timer)),
+                (silence, timer) => silence.or(timer),
+            };
+            let event = match wait {
+                Some(wait) => match rx.recv_timeout(wait) {
                     Ok(event) => event,
-                    // The bound has run out; the next tick turns it into a withdrawal.
+                    // A bound or the timer has run out; the next pass says which.
                     Err(RecvTimeoutError::Timeout) => continue,
-                    Err(RecvTimeoutError::Disconnected) => return self.silence.reader_gone(),
+                    Err(RecvTimeoutError::Disconnected) => {
+                        return self.silence.reader_gone().map(Wake::Feed)
+                    }
                 },
-                // Already withdrawn: no deadline to keep, only a price to wait for.
                 None => match rx.recv() {
                     Ok(event) => event,
-                    Err(RecvError) => return self.silence.reader_gone(),
+                    Err(RecvError) => return self.silence.reader_gone().map(Wake::Feed),
                 },
             };
             if let Some(state) = self.silence.observe(self.origin.elapsed(), &event) {
-                return Some(state);
+                return Some(Wake::Feed(state));
             }
         }
     }
@@ -1767,5 +1803,33 @@ mod tests {
             Some(QuoteState::Withdrawn(Withdrawal::ReaderGone))
         );
         assert_eq!(watch.recv(&rx), None, "nothing left to wait for");
+    }
+
+    /// The loop's own deadline wakes it before the silence bound does, and
+    /// a withdrawal still comes on time after it.
+    #[test]
+    fn the_watch_wakes_on_the_callers_timer_and_still_keeps_its_bound() {
+        let (tx, rx) = mpsc::channel::<FeedEvent>();
+        let mut watch = Watch::new(Silence::new(ms(200)));
+        let started = Instant::now();
+        assert_eq!(
+            watch.recv_until(&rx, Some(started + ms(40))),
+            Some(Wake::Timer)
+        );
+        let woke = started.elapsed();
+        assert!(woke >= ms(40) && woke < ms(200), "{woke:?}");
+        // A timer already past returns at once.
+        assert_eq!(watch.recv_until(&rx, Some(started)), Some(Wake::Timer));
+        // A timer past the bound loses to it.
+        assert!(matches!(
+            watch.recv_until(&rx, Some(started + Duration::from_secs(5))),
+            Some(Wake::Feed(QuoteState::Withdrawn(Withdrawal::Silent { .. })))
+        ));
+        // Withdrawn, the watch waits for a price — or for the timer.
+        assert_eq!(
+            watch.recv_until(&rx, Some(Instant::now() + ms(20))),
+            Some(Wake::Timer)
+        );
+        drop(tx);
     }
 }

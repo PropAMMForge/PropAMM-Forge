@@ -52,6 +52,7 @@ solana-svm-log-collector = "4.2"
 
 # Parsing the `Program data:` line from the log — otherwise the T018 events cannot be read.
 base64 = "0.22"
+propamm-client = { path = "crates/propamm-client" }
 propamm-quote = { path = "crates/propamm-quote" }
 
 # CLI. This whole group lives on THIRD-generation solana crates — the same ones

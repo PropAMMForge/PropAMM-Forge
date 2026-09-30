@@ -25,10 +25,11 @@ use std::path::PathBuf;
 
 use anchor_lang::prelude::Pubkey;
 use anyhow::Result;
+use propamm_client::chain::{decode_token_account, MintInfo};
 use propamm_quote::{inventory_skew_bps, is_fresh, side_price_e9, Inventory, QuoteParams, Side};
 
 use crate::amount::{format_mid_e9, format_raw};
-use crate::chain::{decode_token_account, MintInfo, Session};
+use crate::chain::Session;
 use crate::config::Cluster;
 
 /// Command arguments after parsing.
@@ -119,7 +120,7 @@ pub fn collect(session: &Session, selector: Option<&str>) -> Result<Report> {
             states.push(None);
             continue;
         };
-        let state = crate::chain::decode_vault(address, &account)?;
+        let state = propamm_client::chain::decode_vault(address, &account)?;
         details.extend_from_slice(&[
             state.base_mint,
             state.quote_mint,
@@ -202,12 +203,12 @@ pub fn collect(session: &Session, selector: Option<&str>) -> Result<Report> {
     })
 }
 
-fn read_mint(address: &Pubkey, account: Option<&crate::rpc::Account>) -> Result<MintInfo> {
+fn read_mint(address: &Pubkey, account: Option<&propamm_client::rpc::Account>) -> Result<MintInfo> {
     let account = account.ok_or_else(|| anyhow::anyhow!("mint {address} vanished"))?;
-    crate::chain::decode_mint(address, account)
+    propamm_client::chain::decode_mint(address, account)
 }
 
-fn read_amount(address: &Pubkey, account: Option<&crate::rpc::Account>) -> Result<u64> {
+fn read_amount(address: &Pubkey, account: Option<&propamm_client::rpc::Account>) -> Result<u64> {
     let account =
         account.ok_or_else(|| anyhow::anyhow!("treasury {address} missing — account deleted?"))?;
     Ok(decode_token_account(address, account)?.amount)

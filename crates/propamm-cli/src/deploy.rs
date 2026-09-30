@@ -26,9 +26,10 @@ use std::path::PathBuf;
 
 use anchor_lang::prelude::Pubkey;
 use anyhow::{bail, Result};
+use propamm_client::chain::{associated_token_address, initialize_vault_ix, MintInfo};
+use propamm_client::rpc::Confirmed;
 
-use crate::chain::{associated_token_address, initialize_vault_ix, MintInfo, Session};
-use crate::rpc::Confirmed;
+use crate::chain::Session;
 
 /// Command arguments after parsing.
 #[derive(Clone, Debug)]

@@ -19,5 +19,4 @@ pub mod deploy;
 pub mod fund;
 pub mod init;
 pub mod quote;
-pub mod rpc;
 pub mod status;

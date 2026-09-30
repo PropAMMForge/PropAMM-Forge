@@ -222,6 +222,12 @@ impl<M: PricingModel, C: Monotonic> ModelStep<M, C> {
         &self.model
     }
 
+    /// The budget the model is held to.
+    #[must_use]
+    pub const fn budget(&self) -> Budget {
+        self.budget
+    }
+
     /// Is the model in a run of skips right now?
     #[must_use]
     pub fn is_skipping(&self) -> bool {
@@ -238,6 +244,13 @@ impl<M: PricingModel, C: Monotonic> ModelStep<M, C> {
         let step = match answer {
             // The one late answer that is honoured — see the module docs.
             Ok(Decision::Withdraw { reason }) => Step::Withdraw { reason },
+            // Nothing to offer — an empty vault side (T028). The program refuses
+            // a zero size (`InvalidQuote`): a price nobody can trade at differs
+            // from no price only in being visible. So it is a withdrawal, late
+            // or not, rather than a transaction refused on every tick.
+            Ok(Decision::Quote(quote)) if quote.max_size_base == 0 => Step::Withdraw {
+                reason: "nothing to offer: the quoted size is zero".into(),
+            },
             Ok(Decision::Quote(_)) if took > budget => Step::Skip(Skip::OverBudget {
                 took_ms: took.as_millis(),
                 budget_ms: budget.as_millis(),
@@ -392,6 +405,22 @@ mod tests {
                 budget_ms: 50
             })
         );
+    }
+
+    /// The built-in model quotes a zero size on an empty side (T028); the
+    /// program refuses that, so it comes off the book instead.
+    #[test]
+    fn a_zero_size_is_a_withdrawal_in_time_or_late() {
+        let empty = || {
+            Ok(Decision::Quote(Quote {
+                max_size_base: 0,
+                ..quote()
+            }))
+        };
+        let mut step = step([(10, empty()), (500, empty())]);
+        for _ in 0..2 {
+            assert!(matches!(step.run(&state()).step, Step::Withdraw { .. }));
+        }
     }
 
     #[test]

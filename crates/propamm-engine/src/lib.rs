@@ -6,7 +6,8 @@
 //!
 //! The crate is a library first: every stage is a type that is tested by a plain
 //! `cargo test` on recorded input — the network, the clock and the model process
-//! are behind traits. The binary comes later, once there is a tick to run.
+//! are behind traits. The binary comes with the engine's configuration: the
+//! loop is here, what reads `.env` into it is not yet.
 //!
 //! What is here so far:
 //!
@@ -21,10 +22,20 @@
 //! - [`policy`] — the hybrid update rule: post when a side moved past the
 //!   threshold or the heartbeat is up (FR-011), and refuse a heartbeat whose
 //!   replacement would land after the quote it replaces has expired (FR-011a).
+//! - [`chain`] — the network as the engine uses it: one read of the vault and
+//!   its treasuries at the tip, a blockhash, a send; a refusal sorted by what
+//!   the engine does next.
+//! - [`sender`] — signing with `pricing_authority`, and reading the book to
+//!   see what landed; the slot clock.
+//! - [`cycle`] — the tick loop: feed, model, rule and sender together; a halt
+//!   pauses it, a refusal no retry can fix stops it.
 
 #![forbid(unsafe_code)]
 
+pub mod chain;
+pub mod cycle;
 pub mod feed;
 pub mod model;
 pub mod policy;
+pub mod sender;
 pub mod tick;

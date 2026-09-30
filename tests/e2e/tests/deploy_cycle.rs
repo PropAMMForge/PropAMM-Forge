@@ -197,7 +197,7 @@ struct Balances {
 }
 
 impl Balances {
-    fn read(rpc: &propamm_cli::rpc::Rpc, trader: &Trader, treasuries: Holdings) -> Result<Self> {
+    fn read(rpc: &propamm_client::rpc::Rpc, trader: &Trader, treasuries: Holdings) -> Result<Self> {
         Ok(Self {
             trader_base: token_balance(rpc, &trader.holdings.base)?,
             trader_quote: token_balance(rpc, &trader.holdings.quote)?,
