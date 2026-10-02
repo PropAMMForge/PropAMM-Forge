@@ -103,13 +103,28 @@ case "$CMD" in
       echo "no target/deploy/propamm_vault.so — first: $0 build-sbf" >&2
       exit 1
     fi
-    # The binary is built separately: `cargo test` builds only what the test depends
-    # on, and it does not depend on the binary — the test LAUNCHES it.
-    run cargo build -p propamm-cli
+    # The binaries are built separately: `cargo test` builds only what the test depends
+    # on, and it does not depend on a binary — the test LAUNCHES it.
+    run cargo build -p propamm-cli -p propamm-engine
     # `--test-threads=1` is not about memory but about the port: there is one validator on the network.
     run cargo test -p propamm-e2e -- --ignored --nocapture --test-threads=1
     sed -n '/SC-001 — from/,/^$/p' "$LOG"
-    echo "OK — US1 cycle passed, SC-001 measured"
+    sed -n '/SC-003 — slots/,/^$/p' "$LOG"
+    echo "OK — US1 cycle and the engine run passed, SC-001, SC-003 and SC-011 measured"
+    ;;
+  e2e-engine)
+    # The engine run (T033): SC-003 under two models, SC-011, FR-014 on chain.
+    # About ten minutes — a hundred price moves per model, each waited for.
+    # Needs python3 for the second model.
+    if [[ ! -f target/deploy/propamm_vault.so ]]; then
+      echo "no target/deploy/propamm_vault.so — first: $0 build-sbf" >&2
+      exit 1
+    fi
+    # Both binaries are launched by the test, not linked into it.
+    run cargo build -p propamm-cli -p propamm-engine
+    run cargo test -p propamm-e2e --test engine -- --ignored --nocapture --test-threads=1
+    sed -n '/SC-003 — slots/,/^$/p' "$LOG"
+    echo "OK — SC-003 and SC-011 measured"
     ;;
   golden)
     # Overwrites packages/sdk/tests/fixtures/borsh-golden.json with the bytes borsh
@@ -119,7 +134,7 @@ case "$CMD" in
     echo "OK — golden vectors updated"
     ;;
   *)
-    echo "unknown command: $CMD (build | build-sbf | fmt | fmt-check | test | clippy | bench-cu | e2e | golden)" >&2
+    echo "unknown command: $CMD (build | build-sbf | fmt | fmt-check | test | clippy | bench-cu | e2e | e2e-engine | golden)" >&2
     exit 2
     ;;
 esac

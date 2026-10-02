@@ -1,5 +1,5 @@
 //! Harness for the end-to-end runs: a real validator, real mints, the real
-//! `forge` binary.
+//! `forge` and `propamm-engine` binaries, and a stand-in for the price feed.
 //!
 //! # Why not Mollusk
 //!
@@ -24,7 +24,9 @@
 //! exist (nobody mints them to deploy an AMM), and so does the network. So the
 //! preparation is done before the stopwatch starts and does not count as a command.
 
+pub mod engine;
 pub mod forge;
+pub mod hermes;
 pub mod mints;
 pub mod net;
 pub mod trader;

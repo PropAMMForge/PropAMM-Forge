@@ -41,6 +41,12 @@ solana-message.workspace = true
 solana-signer.workspace = true
 solana-transaction.workspace = true
 
+# The binary only: `--env-file` fills the environment from a `.env`, and the log
+# goes to stderr. `dotenvy` has no dependencies of its own; a hand-written parser
+# would have to get quotes, comments and CRLF right by itself.
+dotenvy.workspace = true
+tracing-subscriber.workspace = true
+
 [dev-dependencies]
 anchor-spl.workspace = true
 base64.workspace = true

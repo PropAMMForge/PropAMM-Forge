@@ -1,6 +1,6 @@
 [package]
 name = "propamm-e2e"
-description = "End-to-end runs on a local network: the US1 cycle and the SC-001 measurement"
+description = "End-to-end runs on a local network: the US1 cycle and SC-001, the engine and SC-003/SC-011"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -32,6 +32,13 @@ tempfile.workspace = true
 # for its config types; `forge` runs as a process.
 propamm-cli = { path = "../../crates/propamm-cli" }
 propamm-client.workspace = true
+
+# The engine runs as a process (T033); the library is here for what the run
+# checks the chain against — the mid a price turns into and what the built-in
+# model quotes for a state — computed by the engine's own functions rather
+# than a second copy of them.
+propamm-engine = { path = "../../crates/propamm-engine" }
+propamm-quote.workspace = true
 
 # `no-entrypoint` is mandatory: without it the crate pulls the BPF entry point
 # into the host build. The .so from `target/deploy` is what executes; only the types,

@@ -78,6 +78,8 @@ Each is a success criterion in `docs/SPEC.md`.
 | Swap instruction cost | ≤ 60,000 CU | 22,950 CU worst pair, 18,647 CU plain SPL |
 | Swaps against a stale quote | 0 of 1,000 (≥ 200 deliberately stale) | 0 of 1,000 |
 | Inventory past its hard bound | 0 of 10,000 | 0 over 695 swaps so far |
+| Quote on chain after a price move past 5 bps (local network, p95) | ≤ 2 slots | 1 slot, both models, 200 moves, none missed |
+| A second pricing model swapped in without touching transport, signing or program | shown by a run | same binary, `MODEL_COMMAND` only: 100/100 quotes carry each model's fingerprint |
 
 `update_quote` costs 6,028 CU and deliberately has no declared ceiling: no budget
 for it is claimed anywhere, and inventing one would be a number off a shelf.
@@ -94,7 +96,8 @@ for it is claimed anywhere, and inventing one would be a number off a shelf.
 | `packages/sdk` | TypeScript SDK: vendored IDL, instruction builders, event decoding |
 | `apps/web` | screen prototype of the console and the deployment wizard |
 | `tests/program` | instruction-level tests on Mollusk, plus the CU budget gate |
-| `tests/e2e` | end-to-end run against a local validator |
+| `tests/e2e` | end-to-end runs against a local validator: the US1 cycle and the engine |
+| `examples/models` | pricing models in Python over the engine's model protocol |
 
 `apps/web` runs on **mock data**. Every figure on those screens is drawn, not
 observed: there is no collector, no database and no chain behind them yet.
@@ -118,22 +121,47 @@ the test, benchmark and end-to-end targets.
 
 ```sh
 scripts/wsl-build.sh build-sbf   # the artifact that goes on chain
-scripts/wsl-build.sh test        # 227 tests
+scripts/wsl-build.sh test        # 396 tests
 scripts/wsl-build.sh bench-cu    # compute-unit report with deltas
 pnpm gate                        # IDL check, lint, typecheck, SDK tests
 ```
 
 Program ID: `77Y9n3vWE2noN1u9PTshuWxdDRsrw9UMtejBypUD9wjq`.
 
+## Running the engine
+
+`propamm-engine` keeps the quote alive: it reads Pyth Hermes, prices with a
+model, and posts with the `pricing_authority` key when a side moves past the
+threshold or the heartbeat is due. Its configuration is the environment; the
+keys and their defaults are in `.env.example`.
+
+```sh
+cargo build --release -p propamm-engine
+target/release/propamm-engine --env-file .env
+```
+
+Four keys are required: `SOLANA_RPC_URL`, `VAULT_ADDRESS` (printed by
+`forge deploy`), `PRICING_AUTHORITY_KEYPAIR` and `PYTH_PRICE_FEED_ID`; Hermes
+also wants `PYTH_API_KEY`. The engine refuses to start if its key is not the
+vault's pricing authority, or if the heartbeat, the model budget or the silence
+bound do not fit inside the vault's freshness limit as read from chain.
+
+The pricing model is the one replaceable part. Leave `MODEL_COMMAND` empty for
+the built-in spread-and-skew model, or point it at your own process speaking
+the line protocol described in `crates/propamm-engine/src/model/external.rs`;
+`examples/models/spread_skew.py` is the built-in model ported to Python and
+the place to start. The measurement above runs both kinds through the same
+binary: `scripts/wsl-build.sh e2e-engine`.
+
 ## Not here yet
 
 Named plainly, because a demo without this list creates a false impression of
 what has been proven:
 
-- **No runnable pricing engine.** Quotes are posted by hand through `forge quote`.
-  The engine's core — feed reading, the models, the hybrid refresh rule, the
-  sender and the tick loop — is a library tested on scripted input; the binary
-  and its measurement on a local network (SC-003) close milestone M2.
+- **No engine measured against the live feed on chain.** SC-003 is measured on a
+  local network with a stand-in for Hermes that moves the price on cue; the
+  feed's own delivery delay is not in that number. On devnet the free RPC tier
+  holds the engine for demo windows, not around the clock.
 - **No aggregator adapter and no router.** Integration and the local router twin
   are M3. Nothing here has been listed by a production router.
 - **No monitoring console on real data.** Event collection, P&L accounting and

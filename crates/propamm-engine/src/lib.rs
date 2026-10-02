@@ -6,8 +6,9 @@
 //!
 //! The crate is a library first: every stage is a type that is tested by a plain
 //! `cargo test` on recorded input — the network, the clock and the model process
-//! are behind traits. The binary comes with the engine's configuration: the
-//! loop is here, what reads `.env` into it is not yet.
+//! are behind traits. The binary, `propamm-engine`, is a thin `main` over
+//! [`config`] and [`cycle`]: the configuration from the environment, the feed
+//! reader on its own thread, the loop on the main one.
 //!
 //! What is here so far:
 //!
@@ -29,12 +30,16 @@
 //!   see what landed; the slot clock.
 //! - [`cycle`] — the tick loop: feed, model, rule and sender together; a halt
 //!   pauses it, a refusal no retry can fix stops it.
+//! - [`config`] — the environment the binary starts from (`.env.example`).
+//! - [`meter`] — the node calls by method, for the free tier's quota.
 
 #![forbid(unsafe_code)]
 
 pub mod chain;
+pub mod config;
 pub mod cycle;
 pub mod feed;
+pub mod meter;
 pub mod model;
 pub mod policy;
 pub mod sender;

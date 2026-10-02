@@ -725,6 +725,49 @@ mod tests {
         }
     }
 
+    /// The second model of the SC-011 run: whatever the inventory, the same
+    /// half-spread, no shift and the same size — the fingerprint the
+    /// end-to-end run recognises it by on chain. A missing mid is a withdrawal.
+    #[test]
+    fn the_fixed_spread_model_ignores_the_inventory() {
+        const FIXED: &str = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../examples/models/fixed_spread.py"
+        );
+        let mut python = start(ModelCommand::new("python3").arg(FIXED).args([
+            "--spread-bps",
+            "25",
+            "--size-base",
+            "1000000000",
+        ]));
+        let lopsided = MarketState {
+            inventory: Inventory {
+                base_amount: 9_000_000_000,
+                quote_amount: 1,
+            },
+            ..state()
+        };
+        for state in [state(), lopsided] {
+            assert_eq!(
+                python.price(&state, soon()),
+                Ok(Decision::Quote(Quote {
+                    mid_e9: state.mid_e9,
+                    spread_bps: 25,
+                    skew_bps: 0,
+                    max_size_base: 1_000_000_000,
+                }))
+            );
+        }
+        let no_mid = MarketState {
+            mid_e9: 0,
+            ..state()
+        };
+        assert!(matches!(
+            python.price(&no_mid, soon()),
+            Ok(Decision::Withdraw { .. })
+        ));
+    }
+
     /// The line on the wire is the one the module docs show — the contract
     /// models are written against.
     #[test]
