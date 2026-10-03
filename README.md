@@ -95,6 +95,7 @@ for it is claimed anywhere, and inventing one would be a number off a shelf.
 | `crates/propamm-engine` | the pricing engine: feed, model, update rule, sender, tick loop |
 | `packages/sdk` | TypeScript SDK: vendored IDL, instruction builders, event decoding |
 | `apps/web` | screen prototype of the console and the deployment wizard |
+| `apps/landing` | the project's landing page: static HTML and CSS, no build |
 | `tests/program` | instruction-level tests on Mollusk, plus the CU budget gate |
 | `tests/e2e` | end-to-end runs against a local validator: the US1 cycle and the engine |
 | `examples/models` | pricing models in Python over the engine's model protocol |
@@ -102,15 +103,18 @@ for it is claimed anywhere, and inventing one would be a number off a shelf.
 `apps/web` runs on **mock data**. Every figure on those screens is drawn, not
 observed: there is no collector, no database and no chain behind them yet.
 
-The prototype is published to GitHub Pages by `.github/workflows/pages.yml` on
-every push to `main` that touches it (Settings → Pages → Source must be set to
-"GitHub Actions" once). It is served under `/<repo>/`, so the Vite base path
-comes from `BASE_PATH` and the router takes its basename from
-`import.meta.env.BASE_URL`; to reproduce the build locally:
+Both are published to GitHub Pages by `.github/workflows/pages.yml` on every
+push to `main` that touches them (Settings → Pages → Source must be set to
+"GitHub Actions" once): the landing page at `/<repo>/`, the prototype under
+`/<repo>/app/`. The Vite base path comes from `BASE_PATH` and the router takes
+its basename from `import.meta.env.BASE_URL`; to reproduce the build locally:
 
 ```sh
-BASE_PATH=/PropAMM-Forge/ pnpm --filter @propamm/web build
+BASE_PATH=/PropAMM-Forge/app/ pnpm --filter @propamm/web build
 ```
+
+The landing page's replay is a recorded engine run, not a drawing:
+`scripts/wsl-build.sh e2e-engine <file>` writes the run's timeline as JSON.
 
 ## Building
 

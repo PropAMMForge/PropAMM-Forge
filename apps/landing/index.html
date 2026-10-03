@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PropAMM Forge — your own proprietary AMM on Solana</title>
+<meta name="description" content="A private vault with your own capital, priced by your own off-chain engine. Five commands to a quoting vault; every figure on the page is measured.">
+<link rel="canonical" href="https://propammforge.github.io/PropAMM-Forge/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="PropAMM Forge — your own proprietary AMM on Solana">
+<meta property="og:description" content="A private vault with your own capital, priced by your own off-chain engine. Measured on a local validator; the limits are on the page.">
+<meta property="og:url" content="https://propammforge.github.io/PropAMM-Forge/">
+<meta property="og:image" content="https://propammforge.github.io/PropAMM-Forge/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="PropAMM Forge — run your own proprietary AMM on Solana">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0c0630">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,600;125,800&amp;display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="stage">
+  <div class="wrap top">
+    <a class="brand" href="./" aria-label="PropAMM Forge — home">
+      <img src="assets/logo.svg" alt="" width="34" height="34">
+      <span class="d">PropAMM Forge</span>
+    </a>
+    <nav aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#measured">Measured</a>
+      <a href="#not-yet">Not here yet</a>
+      <a href="https://github.com/PropAMMForge/PropAMM-Forge">Repository</a>
+    </nav>
+    <span class="m status">Milestone M2 · local validator and devnet · test tokens</span>
+  </div>
+
+  <div class="wrap">
+    <p class="m eyebrow">Proprietary AMM toolkit for Solana</p>
+    <h1 class="d">Run your own proprietary AMM on Solana.</h1>
+    <p class="lede">A private vault holding your own capital, priced by your own off-chain engine. Every desk used to rebuild the program, the pricing engine and the integration from scratch — this is that work, packaged.</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="https://github.com/PropAMMForge/PropAMM-Forge#quick-start">Quick start</a>
+      <a class="btn btn-ghost" href="app/">Console prototype — mock data</a>
+    </div>
+
+    <figure class="replay" id="replay">
+      <div class="replay-head">
+        <p class="d replay-title" style="margin:0">The engine keeps the quote on the book — and takes it off when the feed goes quiet.</p>
+        <button type="button" id="rv-toggle" aria-label="Pause the replay" hidden>❚❚ pause</button>
+      </div>
+      <div class="m legend">
+        <span class="feed">— FEED · SOL/USD stand-in, one event a second</span>
+        <span class="quote">▮ QUOTE · bid–ask on the vault (fixed_spread.py, half-spread 25 bps)</span>
+      </div>
+      <svg id="rv-plot" viewBox="-56 -16 1260 300" role="img" aria-labelledby="rv-desc">
+        <desc id="rv-desc">Recorded run: the feed moves seven times by 10 bps and each time the quote on the vault follows one slot later; then the feed goes silent and the quote is withdrawn 1.42 seconds later.</desc>
+        <defs>
+          <clipPath id="rv-clip"><rect id="rv-reveal" x="-1" y="-20" width="1200" height="290"></rect></clipPath>
+        </defs>
+        <g stroke="#161961" stroke-width="1">
+          <line x1="0" y1="22.9" x2="1180" y2="22.9"/><line x1="0" y1="80" x2="1180" y2="80"/><line x1="0" y1="137.1" x2="1180" y2="137.1"/><line x1="0" y1="194.3" x2="1180" y2="194.3"/><line x1="0" y1="240" x2="1180" y2="240"/>
+        </g>
+        <g fill="#9a96c0" text-anchor="end">
+          <text x="-10" y="27">150.75</text><text x="-10" y="84">150.50</text><text x="-10" y="141">150.25</text><text x="-10" y="198">150.00</text>
+        </g>
+        <g fill="#9a96c0" text-anchor="middle">
+          <text x="0" y="262">0 s</text><text x="277.6" y="262">4 s</text><text x="555.3" y="262">8 s</text><text x="832.9" y="262">12 s</text><text x="1110.6" y="262">16 s</text>
+        </g>
+        <g clip-path="url(#rv-clip)">
+          <path d="M0 16.9 H129.1 V51.3 H273.4 V16.9 H361.6 V51.3 H477.6 V16.9 H623.0 V51.3 H708.7 V16.9 H825.8 V51.3 H1058.1 V223.0 H825.8 V188.7 H708.7 V223.0 H623.0 V188.7 H477.6 V223.0 H361.6 V188.7 H273.4 V223.0 H129.1 V188.7 H0 Z" fill="#334eed" fill-opacity="0.22"/>
+          <path d="M0 16.9 H129.1 V51.3 H273.4 V16.9 H361.6 V51.3 H477.6 V16.9 H623.0 V51.3 H708.7 V16.9 H825.8 V51.3 H1058.1" fill="none" stroke="#334eed" stroke-width="3"/>
+          <path d="M0 188.7 H129.1 V223.0 H273.4 V188.7 H361.6 V223.0 H477.6 V188.7 H623.0 V223.0 H708.7 V188.7 H825.8 V223.0 H1058.1" fill="none" stroke="#334eed" stroke-width="3"/>
+          <path d="M0 102.8 H104.1 V137.1 H246.5 V102.8 H347.3 V137.1 H461.4 V102.8 H603.3 V137.1 H705.1 V102.8 H816.7 V137.1 H959.6" fill="none" stroke="#edebfa" stroke-width="2"/>
+        </g>
+        <g data-t="1.5"><circle cx="104.1" cy="137.1" r="4" fill="#edebfa"/><text x="96" y="160" fill="#edebfa" text-anchor="end">move −10 bps</text></g>
+        <g data-t="1.86"><circle cx="129.1" cy="51.3" r="4.5" fill="#7b8cff"/><text x="137" y="72" fill="#7b8cff">on chain · 1 slot</text></g>
+        <g data-t="13.825"><line x1="959.6" y1="-8" x2="959.6" y2="240" stroke="#9a96c0" stroke-dasharray="3 4"/><text id="rv-silent" x="951" y="4" fill="#9a96c0" text-anchor="end">feed silent · 1.42 s</text></g>
+        <g data-t="15.244"><rect x="1058.1" y="51.3" width="121.9" height="171.7" fill="none" stroke="#7b8cff" stroke-width="1.5" stroke-dasharray="6 5"/><line x1="1058.1" y1="-8" x2="1058.1" y2="240" stroke="#7b8cff" stroke-dasharray="3 4"/><text x="1066" y="4" fill="#7b8cff">quote withdrawn</text></g>
+        <line id="rv-head" x1="1180" y1="-8" x2="1180" y2="240" stroke="#edebfa" stroke-opacity="0.35" visibility="hidden"/>
+      </svg>
+      <div class="m strip">
+        <span>p95 1&nbsp;slot from move to quote · budget 2 · 200&nbsp;moves · 0&nbsp;missed</span>
+        <span class="off">feed silent → quote off the book in 1.42&nbsp;s · bound 2&nbsp;s</span>
+      </div>
+      <figcaption>Replay of a recorded run on a local validator with a stand-in price feed that moves on cue — not devnet, not live. The last <span id="rv-span">17&nbsp;s</span> of the run, every step from the recording. Recorded 2026-10-03; source: <span class="m">scripts/wsl-build.sh e2e-engine</span>.</figcaption>
+    </figure>
+  </div>
+</header>
+
+<main id="main">
+
+<section class="wrap sheet" aria-labelledby="today">
+  <h2 class="d" id="today">What you get today</h2>
+  <p class="lab intro">On the main branch now. Filled tickets are built or measured; dashed ones are not here.</p>
+  <div class="grid grid-4">
+    <div class="tk"><div><h3 class="d">A vault, not a copy of the program</h3><p>One program, many vaults. Your AMM is a vault derived from your address and the pair; you do not build or pay rent for bytecode. Capital is yours alone — deposits from anyone else are rejected by the program.</p></div></div>
+    <div class="tk"><div><h3 class="d">No curve, no oracle on chain</h3><p>The vault stores a mid, a half-spread, an inventory skew and a maximum size; the swap computes the output from those. Every quote carries its slot, and a swap against a stale one is refused.</p></div></div>
+    <div class="tk"><div><h3 class="d">An engine that keeps the quote alive</h3><p>It reads Pyth Hermes, prices with a model and posts when a side moves past the threshold or the heartbeat is due. When the feed goes silent it withdraws the quote instead of repeating the last price.</p></div></div>
+    <div class="tk"><div><h3 class="d">Your model, same engine</h3><p>The pricing model is the one replaceable part: the built-in spread-and-skew, or your own process in any language over a line protocol. A Python port of the built-in model is the starting point.</p></div></div>
+  </div>
+</section>
+
+<section class="wrap sheet" id="how" aria-labelledby="how-h">
+  <h2 class="d" id="how-h">Five commands to a quoting vault</h2>
+  <p class="lab intro">From an empty directory, on a local validator. The sixth line is the engine, which takes over from there.</p>
+  <ol class="grid grid-steps">
+    <li class="tk"><div><div class="m step-n">1</div><div class="m step-cmd">forge init</div><p>writes a project and its own README</p></div></li>
+    <li class="tk"><div><div class="m step-n">2</div><div class="m step-cmd">forge deploy</div><p>creates your vault for the pair</p></div></li>
+    <li class="tk"><div><div class="m step-n">3</div><div class="m step-cmd">forge fund --side base</div><p>moves base capital in</p></div></li>
+    <li class="tk"><div><div class="m step-n">4</div><div class="m step-cmd">forge fund --side quote</div><p>moves quote capital in</p></div></li>
+    <li class="tk"><div><div class="m step-n">5</div><div class="m step-cmd">forge quote</div><p>posts the first quote by hand</p></div></li>
+    <li class="tk tk-dark"><div><div class="m step-n">then</div><div class="m step-cmd">propamm-engine --env-file .env</div><p>from here the engine keeps the quote alive</p></div></li>
+  </ol>
+  <p style="max-width:820px;margin:28px 0 8px">Swapping is not a <span class="m">forge</span> command by design: the counterparty is a third party. Build the swap with the TypeScript SDK, or let an aggregator build it.</p>
+  <p class="lab" style="max-width:820px;margin:0">Mints whose transfers change the amount — transfer hook, transfer fee, permanent delegate and the like — are refused at deploy, with the extension named.</p>
+</section>
+
+<section class="wrap sheet" id="measured" aria-labelledby="measured-h">
+  <h2 class="d" id="measured-h">Measured, not estimated</h2>
+  <p class="lab intro">Every figure is the output of a command in the repository. Where it was measured is part of the figure.</p>
+  <div class="grid">
+    <div class="tk"><div><div class="d fig">2.43 s <small>5 commands</small></div><p class="claim">Empty directory to a vault that has executed its first swap.</p><div class="m meta">Budget: 15 min, 5 commands<br>Measured on: local validator</div><div class="m sc">SC-001</div></div></div>
+    <div class="tk"><div><div class="d fig">22,950 CU</div><p class="claim">The swap instruction on the worst pair (Token-2022); 18,647 CU on plain SPL.</p><div class="m meta">Budget: 60,000 CU<br>Measured on: CU benchmark</div><div class="m sc">SC-002</div></div></div>
+    <div class="tk"><div><div class="d fig">0 of 1,000</div><p class="claim">Swaps executed against a stale quote; 200 of the 1,000 were deliberately stale.</p><div class="m meta">Budget: 0<br>Measured on: program tests</div><div class="m sc">SC-004</div></div></div>
+    <div class="tk"><div><div class="d fig">1 slot <small>p95</small></div><p class="claim">From a price move past 5 bps to the new quote on chain. Both models, 200 moves, max 2, none missed.</p><div class="m meta">Budget: 2 slots<br>Measured on: local validator, stand-in feed — not devnet</div><div class="m sc">SC-003</div></div></div>
+    <div class="tk"><div><div class="d fig">100 / 100</div><p class="claim">Same engine binary, only <span class="m">MODEL_COMMAND</span> changed: every quote of each model carries that model's fingerprint on chain.</p><div class="m meta">Budget: proven by the run<br>Measured on: local validator</div><div class="m sc">SC-011</div></div></div>
+    <div class="tk"><div><div class="d fig">1.42–1.86 s</div><p class="claim">Feed went silent → quote off the book. Three recorded runs.</p><div class="m meta">Bound: 2 s of silence<br>Measured on: local validator</div><div class="m sc">FR-014</div></div></div>
+    <div class="tk"><div><div class="d fig">0 over 695 <span class="partial">partial</span></div><p class="claim">Swaps that pushed inventory past its hard bound. The 10,000-swap run with hostile sequences is ahead.</p><div class="m meta">Budget: 0 of 10,000<br>Measured on: program tests</div><div class="m sc">SC-010</div></div></div>
+  </div>
+  <pre class="m proof">SC-003 — slots from the price move to the quote on chain, p95 ≤ 2:
+  built-in         n=100 p50=1 p95=1 max=2 missed=0
+  fixed_spread.py  n=100 p50=1 p95=1 max=2 missed=0
+SC-011 — one binary, the model swapped by MODEL_COMMAND only:
+  built-in         100/100 quotes on chain are this model's
+  fixed_spread.py  100/100 quotes on chain are this model's
+FR-014 — the feed went quiet: the quote was off the book in 1.42 s (silence bound 2 s)</pre>
+  <p class="m lab" style="margin:8px 0 0">The run the replay above is taken from, 2026-10-03.</p>
+</section>
+
+<section class="wrap sheet" id="not-yet" aria-labelledby="not-yet-h">
+  <h2 class="d" id="not-yet-h">What it does not do — yet, or at all</h2>
+  <p class="lab intro">Named plainly, because a demo without this list creates a false impression of what has been proven.</p>
+  <div class="grid">
+    <div class="no"><svg class="edge" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,0 92,0 100,8.5 100,100 0,100" fill="none" stroke="#9a96c0" stroke-width="1.5" stroke-dasharray="6 5" vector-effect="non-scaling-stroke"/></svg><h3 class="d">No run against the live feed on chain</h3><p>The slot figures are from a local validator with a stand-in feed. On devnet the free RPC tier holds the engine for demo windows, not around the clock.</p></div>
+    <div class="no"><svg class="edge" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,0 92,0 100,8.5 100,100 0,100" fill="none" stroke="#9a96c0" stroke-width="1.5" stroke-dasharray="6 5" vector-effect="non-scaling-stroke"/></svg><h3 class="d">No aggregator adapter, no router</h3><p>Next milestone. It will be tested against a local router twin, <strong>not Jupiter</strong>: ready to submit, not listed. Nothing here has been listed by a production router.</p></div>
+    <div class="no"><svg class="edge" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,0 92,0 100,8.5 100,100 0,100" fill="none" stroke="#9a96c0" stroke-width="1.5" stroke-dasharray="6 5" vector-effect="non-scaling-stroke"/></svg><h3 class="d">No console on real data</h3><p>The console at <a href="app/">/app/</a> is a screen prototype; every figure on it is drawn.</p></div>
+    <div class="no"><svg class="edge" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,0 92,0 100,8.5 100,100 0,100" fill="none" stroke="#9a96c0" stroke-width="1.5" stroke-dasharray="6 5" vector-effect="non-scaling-stroke"/></svg><h3 class="d">No risk loop</h3><p>No emergency halt, no daily-loss limit, no automatic withdrawal on loss yet.</p></div>
+    <div class="no"><svg class="edge" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,0 92,0 100,8.5 100,100 0,100" fill="none" stroke="#9a96c0" stroke-width="1.5" stroke-dasharray="6 5" vector-effect="non-scaling-stroke"/></svg><h3 class="d">No mainnet, no real capital</h3><p>Local validator and devnet, test tokens. Nothing here says how a vault behaves under real order flow or MEV.</p></div>
+    <div class="no"><svg class="edge" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,0 92,0 100,8.5 100,100 0,100" fill="none" stroke="#9a96c0" stroke-width="1.5" stroke-dasharray="6 5" vector-effect="non-scaling-stroke"/></svg><h3 class="d">No trading strategy</h3><p>A template engine with a spread and an inventory skew. Alpha, calibration and any claim of profit are the desk's own work.</p></div>
+  </div>
+</section>
+
+<section class="wrap sheet" aria-labelledby="faq-h">
+  <h2 class="d" id="faq-h">Questions a desk asks first</h2>
+  <div class="faq">
+    <details open><summary>Do I deploy my own program?</summary><p>No. One program, many vaults. The cost of that choice: a program upgrade applies to every vault, and the upgrade authority is not the vault owner.</p></details>
+    <details><summary>Does the program read a price feed?</summary><p>No. An off-chain signer posts the quote; the program only checks its age. That is why a swap fits a router's compute budget.</p></details>
+    <details><summary>Which tokens work?</summary><p>SPL and Token-2022 without extensions that change transferred amounts; those are refused at deploy.</p></details>
+    <details><summary>Is it on Jupiter?</summary><p>No. Integration is the next milestone and is tested against a local router twin, not Jupiter.</p></details>
+    <details><summary>Can my quant team use Python?</summary><p>Yes. Point <span class="m">MODEL_COMMAND</span> at your process; the measured run swapped a Python model in with the same engine binary.</p></details>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <a href="https://github.com/PropAMMForge/PropAMM-Forge">github.com/PropAMMForge/PropAMM-Forge</a>
+    <span class="m" title="77Y9n3vWE2noN1u9PTshuWxdDRsrw9UMtejBypUD9wjq">Program 77Y9n3…D9wjq</span>
+    <span>Milestone M2</span>
+    <span>Source available — no license granted.</span>
+  </div>
+</footer>
+
+<script>
+// The replay: the recorded run drawn left to right in its own time (17 s),
+// held for 3 s, then again. Without this script the page shows the last frame.
+(function () {
+  var fig = document.getElementById('replay');
+  if (!fig || !window.requestAnimationFrame) return;
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  var PLAY = 17, HOLD = 3, WIDTH = 1180, QUIET = 13.825, CLEARED = 15.244;
+  var reveal = document.getElementById('rv-reveal');
+  var head = document.getElementById('rv-head');
+  var silent = document.getElementById('rv-silent');
+  var marks = fig.querySelectorAll('[data-t]');
+  var button = document.getElementById('rv-toggle');
+  // At phone width the whole run would be a strip 70 px tall: show its last
+  // 8.5 s — the last three moves, the silence and the withdrawal — at twice the scale.
+  var START = 0;
+  if (window.matchMedia('(max-width: 640px)').matches) {
+    START = 8.5;
+    document.getElementById('rv-plot').setAttribute('viewBox', '560 -16 640 300');
+    document.getElementById('rv-span').textContent = '8.5 s';
+  }
+  var t = START, last = null, paused = false;
+
+  function draw() {
+    var x = Math.min(t, PLAY) / PLAY * WIDTH;
+    reveal.setAttribute('width', x + 1);
+    head.setAttribute('x1', x); head.setAttribute('x2', x);
+    head.setAttribute('visibility', t < PLAY ? 'visible' : 'hidden');
+    marks.forEach(function (m) {
+      m.setAttribute('visibility', t >= parseFloat(m.getAttribute('data-t')) ? 'visible' : 'hidden');
+    });
+    // The recorded interval, shown as it elapses in the recording's own time.
+    silent.textContent = 'feed silent · ' + Math.min(t - QUIET, CLEARED - QUIET).toFixed(2) + ' s';
+  }
+
+  function frame(now) {
+    if (last !== null && !paused) {
+      t += (now - last) / 1000;
+      if (t >= PLAY + HOLD) t = START;
+    }
+    last = now;
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  button.hidden = false;
+  button.addEventListener('click', function () {
+    paused = !paused;
+    button.textContent = paused ? '▶ play' : '❚❚ pause';
+    button.setAttribute('aria-label', paused ? 'Play the replay' : 'Pause the replay');
+  });
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

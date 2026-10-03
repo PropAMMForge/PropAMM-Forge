@@ -1,19 +1,22 @@
 name: Pages
 
-# Publishes `apps/web` — the console prototype on mock data — to GitHub Pages.
+# Publishes the landing page (`apps/landing`, static, no build) at the site root
+# and `apps/web` — the console prototype on mock data — under `app/`.
 #
 # One-time setup in the repository: Settings → Pages → Source: "GitHub Actions".
 # Without it the deploy job fails with "Resource not accessible" on the first run.
 #
-# The site is a project site, so it lives under `/<repo>/`. The base path is
-# derived from the repository name here and handed to Vite as BASE_PATH; the
-# router reads the same value back through `import.meta.env.BASE_URL`.
+# The site is a project site, so it lives under `/<repo>/` and the console under
+# `/<repo>/app/`. That base path is derived from the repository name here and
+# handed to Vite as BASE_PATH; the router reads the same value back through
+# `import.meta.env.BASE_URL`.
 
 on:
   push:
     branches: [main]
     paths:
       - 'apps/web/**'
+      - 'apps/landing/**'
       - 'packages/sdk/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
@@ -49,20 +52,34 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Build
+      - name: Build the console
         env:
-          BASE_PATH: /${{ github.event.repository.name }}/
+          BASE_PATH: /${{ github.event.repository.name }}/app/
         run: pnpm --filter @propamm/web build
 
-      # Pages has no SPA fallback: a direct hit on `/<repo>/vaults` returns the
-      # 404 page. Serving the same bundle as 404.html lets the router take over
-      # from there — the status code is still 404, which is fine for a prototype.
-      - name: SPA fallback
-        run: cp apps/web/dist/index.html apps/web/dist/404.html
+      # One artifact, two folders: the landing at the root, the console in app/.
+      # The landing is copied as it is — it has no build step.
+      #
+      # Pages has no SPA fallback, and it serves a custom 404 only from the site
+      # root — `app/404.html` would be ignored. So the root 404.html is the
+      # console's own shell: a direct hit on `/<repo>/app/vaults` gets it and the
+      # router takes over (the status code is still 404, fine for a prototype).
+      # A path outside `app/` would start the console with a basename that does
+      # not match — an empty screen — so the shell first sends those to the landing.
+      - name: Assemble the site
+        env:
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          mkdir -p site
+          cp -r apps/landing/. site/
+          cp -r apps/web/dist site/app
+          guard="<script>if(location.pathname.indexOf('/${REPO}/app/')!==0)location.replace('/${REPO}/')</script>"
+          sed "s|<head>|<head>${guard}|" apps/web/dist/index.html > site/404.html
+          grep -qF "$guard" site/404.html
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: apps/web/dist
+          path: site
 
   deploy:
     needs: build
