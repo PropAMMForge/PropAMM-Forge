@@ -120,10 +120,16 @@ case "$CMD" in
       echo "no target/deploy/propamm_vault.so — first: $0 build-sbf" >&2
       exit 1
     fi
+    # An optional second argument is where to write the run's timeline (JSON) —
+    # what the landing page draws. A relative path is from the repository root.
+    if [[ -n "${2:-}" ]]; then
+      export E2E_TRACE="$(realpath -m "$2")"
+    fi
     # Both binaries are launched by the test, not linked into it.
     run cargo build -p propamm-cli -p propamm-engine
     run cargo test -p propamm-e2e --test engine -- --ignored --nocapture --test-threads=1
     sed -n '/SC-003 — slots/,/^$/p' "$LOG"
+    grep -F 'timeline written to' "$LOG" || true
     echo "OK — SC-003 and SC-011 measured"
     ;;
   golden)

@@ -29,6 +29,13 @@
 //! reach any engine — that is the feed's, not the engine's, and the same for
 //! every consumer of it.
 //!
+//! # The timeline
+//!
+//! With `E2E_TRACE=<file>` the run is also written out as JSON: every move,
+//! the slot it was read at, what landed on the vault and when, and the feed
+//! going quiet. It plays no part in the verdict; it is what the landing page
+//! draws, so the picture there is this run and not a drawing of one.
+//!
 //! # Why `#[ignore]`
 //!
 //! As in `deploy_cycle.rs`: a validator, port 8899, the `.so`, the two
@@ -185,13 +192,21 @@ fn the_quote_follows_the_price_and_a_second_model_drops_in() -> Result<()> {
     // ── 1. The built-in model.
     let builtin = SpreadSkewModel::checked(BUILTIN[0], BUILTIN[1], BUILTIN[2], BUILTIN[3])
         .expect("the defaults are a valid model");
+    let mut trace = Trace::new();
     let mut engine = Engine::start(&env(None), &workspace.path().join("engine-builtin.log"))?;
-    let first = measure(&watch, &hermes, &mut engine, "built-in", |book, state| {
-        let quote = builtin.quote(state).expect("the model prices this state");
-        book.spread_bps == quote.spread_bps
-            && book.skew_bps == quote.skew_bps
-            && book.max_size_base == quote.max_size_base
-    })?;
+    let first = measure(
+        &watch,
+        &hermes,
+        &mut engine,
+        &mut trace,
+        "built-in",
+        |book, state| {
+            let quote = builtin.quote(state).expect("the model prices this state");
+            book.spread_bps == quote.spread_bps
+                && book.skew_bps == quote.skew_bps
+                && book.max_size_base == quote.max_size_base
+        },
+    )?;
     engine.stop();
 
     // ── 2. A model in another process. The same binary; only `MODEL_COMMAND`.
@@ -208,6 +223,7 @@ fn the_quote_follows_the_price_and_a_second_model_drops_in() -> Result<()> {
         &watch,
         &hermes,
         &mut engine,
+        &mut trace,
         "fixed_spread.py",
         |book, _| {
             book.spread_bps == FIXED_SPREAD_BPS
@@ -221,7 +237,9 @@ fn the_quote_follows_the_price_and_a_second_model_drops_in() -> Result<()> {
     let quiet_at = Instant::now();
     let cleared = loop {
         engine.alive()?;
-        if watch.read()?.1.mid_e9 == 0 {
+        let (slot, vault) = watch.read()?;
+        if vault.mid_e9 == 0 {
+            trace.quiet(quiet_at, Instant::now(), slot);
             break quiet_at.elapsed();
         }
         if quiet_at.elapsed() > SILENCE + LANDING_TIMEOUT {
@@ -259,6 +277,10 @@ fn the_quote_follows_the_price_and_a_second_model_drops_in() -> Result<()> {
         println!("  {}", run.rpc_line());
     }
     println!();
+    if let Some(path) = std::env::var_os("E2E_TRACE") {
+        trace.write(&PathBuf::from(&path))?;
+        println!("timeline written to {}", PathBuf::from(path).display());
+    }
 
     // ── The verdict.
     for run in [&first, &second] {
@@ -374,6 +396,78 @@ impl Run {
     }
 }
 
+/// The run as a timeline — see "The timeline" above. Times are milliseconds
+/// from the first move; integers past 2^53 are strings, as in the model protocol.
+struct Trace {
+    origin: Option<Instant>,
+    moves: Vec<serde_json::Value>,
+    quiet: Option<serde_json::Value>,
+}
+
+impl Trace {
+    fn new() -> Self {
+        Self {
+            origin: None,
+            moves: Vec::new(),
+            quiet: None,
+        }
+    }
+
+    fn ms(&mut self, at: Instant) -> u128 {
+        let origin = *self.origin.get_or_insert(at);
+        at.saturating_duration_since(origin).as_millis()
+    }
+
+    fn moved(
+        &mut self,
+        model: &str,
+        price: u64,
+        slot_before: u64,
+        emitted: Instant,
+        landed: Option<(&Vault, Instant)>,
+    ) {
+        let t_ms = self.ms(emitted);
+        let landed = landed.map(|(vault, seen)| {
+            json!({
+                "seen_ms": self.ms(seen),
+                "quote_slot": vault.quote_slot,
+                "mid_e9": vault.mid_e9.to_string(),
+                "spread_bps": vault.spread_bps,
+                "skew_bps": vault.skew_bps,
+                "max_size_base": vault.max_size_base.to_string(),
+            })
+        });
+        self.moves.push(json!({
+            "model": model,
+            "t_ms": t_ms,
+            "price_mantissa": price.to_string(),
+            "expo": -8,
+            "slot_before": slot_before,
+            "landed": landed,
+        }));
+    }
+
+    fn quiet(&mut self, quiet_at: Instant, cleared_at: Instant, slot: u64) {
+        self.quiet = Some(json!({
+            "t_ms": self.ms(quiet_at),
+            "cleared_ms": self.ms(cleared_at),
+            "cleared_seen_slot": slot,
+        }));
+    }
+
+    fn write(&self, path: &std::path::Path) -> Result<()> {
+        let body = json!({
+            "run": "tests/e2e/tests/engine.rs — local validator, stand-in Hermes",
+            "move_bps": MOVE_BPS,
+            "silence_ms": SILENCE.as_millis(),
+            "moves": self.moves,
+            "quiet": self.quiet,
+        });
+        std::fs::write(path, serde_json::to_vec_pretty(&body)?)
+            .with_context(|| format!("writing the timeline to {}", path.display()))
+    }
+}
+
 fn fmt_slots(slots: u64) -> String {
     if slots == u64::MAX {
         "missed".to_owned()
@@ -456,6 +550,7 @@ fn measure(
     watch: &Watch<'_>,
     hermes: &FakeHermes,
     engine: &mut Engine,
+    trace: &mut Trace,
     model: &'static str,
     is_ours: impl Fn(&Vault, &MarketState) -> bool,
 ) -> Result<Run> {
@@ -509,8 +604,12 @@ fn measure(
                 if is_ours(&vault, &watch.state(vault.mid_e9, &vault)?) {
                     run.fingerprinted += 1;
                 }
+                trace.moved(model, price, before, emitted.at, Some((&vault, seen)));
             }
-            None => run.slots.push(None),
+            None => {
+                run.slots.push(None);
+                trace.moved(model, price, before, emitted.at, None);
+            }
         }
         engine.alive()?;
         // 1.0–2.0 s apart, spread over the feed's one-second rhythm and the
