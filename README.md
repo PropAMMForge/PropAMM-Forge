@@ -178,3 +178,7 @@ what has been proven:
 - **No trading strategy.** A template engine with a spread and an inventory skew
   is supplied. Alpha research, calibration and any claim of profitability are
   the desk's own work.
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE).

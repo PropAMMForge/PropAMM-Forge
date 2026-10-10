@@ -2,6 +2,7 @@
   "name": "@propamm/sdk",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
   "description": "PropAMM TS client: vendored IDL, instruction builders, account and event decoders",
   "type": "module",
   "exports": {

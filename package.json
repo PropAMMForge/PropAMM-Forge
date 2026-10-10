@@ -2,6 +2,7 @@
   "name": "propamm-forge",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "description": "Builder and SDK for deploying your own proprietary AMM on Solana",
   "packageManager": "pnpm@9.15.0",
   "engines": {

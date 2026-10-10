@@ -7,7 +7,7 @@ members = ["crates/*", "programs/*", "tests/e2e", "tests/program"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-license = "UNLICENSED"
+license = "Apache-2.0"
 repository = "https://github.com/PropAMMForge/PropAMM-Forge"
 
 # The versions here are the single source of truth for the whole workspace.
