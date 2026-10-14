@@ -1,0 +1,27 @@
+[package]
+name = "propamm-adapter"
+description = "The vault as a Jupiter venue: an implementation of jupiter_amm_interface::Amm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# The interface is on THIRD-generation solana crates — the same ones anchor-lang
+# is on — so its `Pubkey` and the program's `Pubkey` are one type, and the adapter
+# needs no `to_bytes` crossing. See the workspace manifest for why that is 1.0.0-beta.0.
+[dependencies]
+anchor-lang.workspace = true
+anyhow.workspace = true
+jupiter-amm-interface.workspace = true
+propamm-quote.workspace = true
+
+# The vault account is decoded with the program's own type and mapped to the math
+# with the program's own `quote_params()` — the one bridge, pinned by its sentinel
+# test. A second decoder by byte offsets would be a second bridge (T034 decision).
+propamm-vault = { path = "../../programs/propamm-vault", features = ["no-entrypoint"] }
+
+# Not the workspace `solana-account`: that one is the fourth generation, for
+# Mollusk. The `Account` in the interface's `AccountMap` is the third.
+[dev-dependencies]
+solana-account = "3.4"

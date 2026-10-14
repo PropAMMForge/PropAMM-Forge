@@ -21,7 +21,15 @@ repository = "https://github.com/PropAMMForge/PropAMM-Forge"
 [workspace.dependencies]
 anchor-lang = "1.2.0"
 anchor-spl = "1.2.0"
-jupiter-amm-interface = "0.6.1"
+
+# 0.6.1 (the PLAN pin) does NOT compile here — measured in T034. It asks for
+# `solana-account-decoder >=2`, cargo takes 4.1.2, and 4.x no longer has
+# `encode_ui_account` / `UiAccount`: the open-range failure described above,
+# inside the foreign crate. Upstream fixed it in 1.0.0-beta.0 by pinning the
+# THIRD generation (the same as anchor-lang, so one `Pubkey` in the adapter).
+# The trait is the same apart from a required `get_accounts_len`. The exact `=` is
+# deliberate: a beta's next release is allowed to change the API.
+jupiter-amm-interface = "=1.0.0-beta.0"
 
 # `spl-token-2022` is NO LONGER NEEDED here and must not be added: anchor-spl
 # 1.2.0 works through `spl-token-2022-interface` and re-exports it as
