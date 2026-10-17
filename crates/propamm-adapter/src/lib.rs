@@ -37,7 +37,7 @@ use jupiter_amm_interface::{
     try_get_account_data_and_owner, AccountMap, Amm, AmmContext, ClockRef, KeyedAccount, Quote,
     QuoteParams, SwapAndAccountMetas, SwapMode, SwapParams,
 };
-use propamm_quote::{compute_swap, Inventory, Side, SwapRequest};
+use propamm_quote::{compute_swap, Inventory, QuoteError, Side, SwapRequest};
 use propamm_vault::state::Vault;
 use std::sync::atomic::Ordering;
 
@@ -132,6 +132,38 @@ fn treasury_amount(account_map: &AccountMap, address: &Pubkey, mint: &Pubkey) ->
     );
     let amount: [u8; 8] = data[64..72].try_into().context("amount field")?;
     Ok(u64::from_le_bytes(amount))
+}
+
+/// A refusal of the math itself, kept typed inside the `anyhow::Error` that
+/// [`Amm::quote`] returns.
+///
+/// A wrapper here rather than `impl Error for QuoteError` in `propamm-quote`:
+/// that crate is `no_std` and is compiled into the program, and the adapter's
+/// needs are no reason to touch the on-chain artifact. The text is the same as
+/// before — the type is what is new.
+#[derive(Debug)]
+struct MathRefusal {
+    vault: Pubkey,
+    reason: QuoteError,
+}
+
+impl std::fmt::Display for MathRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "vault {} does not quote: {}", self.vault, self.reason)
+    }
+}
+
+impl std::error::Error for MathRefusal {}
+
+/// The math's reason, if [`Amm::quote`] refused because of it.
+///
+/// `None` means the refusal came from the adapter's own guards — the halted
+/// flag, an unknown pair, exact-out, no `update` yet. The program maps the same
+/// [`QuoteError`] onto its error code (`VaultError::from`), so a router and a
+/// test can tell "the chain would refuse with this code" from "not this venue".
+pub fn quote_refusal(err: &anyhow::Error) -> Option<QuoteError> {
+    err.downcast_ref::<MathRefusal>()
+        .map(|refusal| refusal.reason)
 }
 
 impl PropAmm {
@@ -253,8 +285,12 @@ impl Amm for PropAmm {
             min_amount_out: 0,
         };
         let slot = self.clock.slot.load(Ordering::Relaxed);
-        let result = compute_swap(&self.params, &inventory, &request, slot)
-            .map_err(|err| anyhow!("vault {} does not quote: {err}", self.key))?;
+        let result = compute_swap(&self.params, &inventory, &request, slot).map_err(|reason| {
+            MathRefusal {
+                vault: self.key,
+                reason,
+            }
+        })?;
 
         // No fee: the program charges none, the spread is in the side price, and a
         // derived "fee" would diverge from the fee line of the P&L (FR-021). T034 decision.
@@ -484,6 +520,11 @@ mod tests {
         ctx.clock_ref.slot.store(QUOTE_SLOT + 11, Ordering::Relaxed);
         let stale = QuoteError::QuoteStale.to_string();
         assert!(reason(&amm, &params).contains(&stale));
+        assert_eq!(
+            quote_refusal(&amm.quote(&params).unwrap_err()),
+            Some(QuoteError::QuoteStale),
+            "the reason must stay typed — T035 compares it with the program's code"
+        );
         assert!(clone
             .quote(&params)
             .unwrap_err()
@@ -501,6 +542,11 @@ mod tests {
         assert!(!amm.is_active());
         let why = reason(&amm, &ask(1_000_000_000, BASE_MINT, QUOTE_MINT));
         assert!(why.contains("halted"), "{why}");
+        // The halt is the adapter's own guard, not the math's.
+        let err = amm
+            .quote(&ask(1_000_000_000, BASE_MINT, QUOTE_MINT))
+            .unwrap_err();
+        assert_eq!(quote_refusal(&err), None);
     }
 
     /// A cleared quote is "not quoting now", not "gone": the venue stays active.
@@ -512,6 +558,10 @@ mod tests {
         assert!(amm.is_active());
         let why = reason(&amm, &ask(1_000_000_000, BASE_MINT, QUOTE_MINT));
         assert!(why.contains(&QuoteError::QuoteNotSet.to_string()), "{why}");
+        let err = amm
+            .quote(&ask(1_000_000_000, BASE_MINT, QUOTE_MINT))
+            .unwrap_err();
+        assert_eq!(quote_refusal(&err), Some(QuoteError::QuoteNotSet));
     }
 
     #[test]

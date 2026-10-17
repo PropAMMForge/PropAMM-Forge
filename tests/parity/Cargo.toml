@@ -1,0 +1,37 @@
+[package]
+name = "propamm-parity"
+description = "SC-006: the adapter's quote equals what the program executes, on random inputs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# The two sides of the equality come from where they really live: the program is
+# the `.so` run by the Mollusk harness of `tests/program` (not a host build of the
+# crate), the quote is `propamm-adapter` fed with the bytes that run left behind.
+# The harness is reused, not copied — a second world assembled slightly
+# differently would be measuring a different deployment.
+[dependencies]
+anchor-lang.workspace = true
+anchor-spl.workspace = true
+anyhow.workspace = true
+jupiter-amm-interface.workspace = true
+mollusk-svm.workspace = true
+propamm-adapter = { path = "../../crates/propamm-adapter" }
+propamm-quote.workspace = true
+propamm-vault = { path = "../../programs/propamm-vault", features = ["no-entrypoint"] }
+propamm-vault-tests = { path = "../program" }
+solana-instruction.workspace = true
+solana-program-error.workspace = true
+solana-pubkey.workspace = true
+
+# Both generations of `Account` meet in this crate: the Mollusk store holds the
+# fourth, the interface's `AccountMap` takes the third. Their fields are the same,
+# so the crossing is a field-by-field copy in `src/lib.rs`, the same way keys
+# cross via `to_bytes` in `tests/program`.
+solana-account.workspace = true
+solana-account-v3 = { package = "solana-account", version = "3.4" }
+
+[dev-dependencies]
+proptest.workspace = true

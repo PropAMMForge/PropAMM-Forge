@@ -2839,6 +2839,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "propamm-parity"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "anyhow",
+ "jupiter-amm-interface",
+ "mollusk-svm",
+ "propamm-adapter",
+ "propamm-quote",
+ "propamm-vault",
+ "propamm-vault-tests",
+ "proptest",
+ "solana-account 3.4.0",
+ "solana-account 4.3.2",
+ "solana-instruction",
+ "solana-program-error",
+ "solana-pubkey 4.2.1",
+]
+
+[[package]]
 name = "propamm-quote"
 version = "0.1.0"
 dependencies = [
