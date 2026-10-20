@@ -26,9 +26,13 @@
 //! [`jupiter_amm_interface::Swap`] is a closed enum: a venue gets its variant from
 //! Jupiter at listing, and there is none for this program. The adapter does not
 //! borrow someone else's variant — a route built that way would go into another
-//! program in a real router. See [`Amm::get_swap_and_account_metas`] (T036).
+//! program in a real router. The swap instruction comes from the adapter's own
+//! [`PropAmm::swap_instruction`] (FR-017, T036), which takes the same
+//! [`SwapParams`] a router hands to [`Amm::get_swap_and_account_metas`].
 
 #![forbid(unsafe_code)]
+
+mod swap;
 
 use anchor_lang::prelude::Pubkey;
 use anchor_lang::AccountDeserialize;
@@ -75,9 +79,24 @@ pub struct PropAmm {
     /// `None` until the first [`Amm::update`]: inventory lives only in the token
     /// accounts, and there is nothing honest to quote before they are read.
     inventory: Option<Inventory>,
+    /// The token program of each side, read with the inventory from the owners
+    /// of the treasuries — the swap instruction has to name them, and the vault
+    /// state does not record them.
+    token_programs: Option<TokenPrograms>,
     /// The router's clock, shared — not copied — so that every clone sees the
     /// slot the router last stored. Freshness (FR-007) is measured against it.
     clock: ClockRef,
+}
+
+/// The token program of each side; the pair may be mixed.
+///
+/// Taken from the treasury, not from the mint: a token account is owned by the
+/// program that owns its mint, so the answer is the same, and the treasury is an
+/// account the router reads anyway — the mint would be one more fetch per venue.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct TokenPrograms {
+    base: Pubkey,
+    quote: Pubkey,
 }
 
 /// A decoded vault account. The owner is checked before the bytes are trusted:
@@ -108,8 +127,12 @@ fn decode_vault(address: &Pubkey, owner: &Pubkey, mut data: &[u8]) -> Result<Vau
     })
 }
 
-/// The balance of a treasury, or why it cannot be paid out of.
-fn treasury_amount(account_map: &AccountMap, address: &Pubkey, mint: &Pubkey) -> Result<u64> {
+/// The balance of a treasury and its token program, or why it cannot be paid out of.
+fn read_treasury(
+    account_map: &AccountMap,
+    address: &Pubkey,
+    mint: &Pubkey,
+) -> Result<(u64, Pubkey)> {
     let (data, owner) = try_get_account_data_and_owner(account_map, address)?;
     ensure!(
         *owner == TOKEN_PROGRAM || *owner == TOKEN_2022_PROGRAM,
@@ -131,7 +154,7 @@ fn treasury_amount(account_map: &AccountMap, address: &Pubkey, mint: &Pubkey) ->
         "treasury {address} is not in the initialized state (frozen or empty)"
     );
     let amount: [u8; 8] = data[64..72].try_into().context("amount field")?;
-    Ok(u64::from_le_bytes(amount))
+    Ok((u64::from_le_bytes(amount), *owner))
 }
 
 /// A refusal of the math itself, kept typed inside the `anyhow::Error` that
@@ -206,6 +229,7 @@ impl Amm for PropAmm {
             params: view.params,
             halted: view.halted,
             inventory: None,
+            token_programs: None,
             clock: amm_context.clock_ref.clone(),
         })
     }
@@ -256,13 +280,20 @@ impl Amm for PropAmm {
 
         // Everything is read before anything is stored: a failed update leaves the
         // previous consistent state, not a new quote over old balances.
-        let inventory = Inventory {
-            base_amount: treasury_amount(account_map, &self.base_vault, &self.base_mint)?,
-            quote_amount: treasury_amount(account_map, &self.quote_vault, &self.quote_mint)?,
-        };
+        let (base_amount, base_program) =
+            read_treasury(account_map, &self.base_vault, &self.base_mint)?;
+        let (quote_amount, quote_program) =
+            read_treasury(account_map, &self.quote_vault, &self.quote_mint)?;
         self.params = view.params;
         self.halted = view.halted;
-        self.inventory = Some(inventory);
+        self.inventory = Some(Inventory {
+            base_amount,
+            quote_amount,
+        });
+        self.token_programs = Some(TokenPrograms {
+            base: base_program,
+            quote: quote_program,
+        });
         Ok(())
     }
 
@@ -306,7 +337,7 @@ impl Amm for PropAmm {
         bail!(
             "jupiter-amm-interface has no `Swap` variant for the vault program — Jupiter \
              assigns one at listing; until then the swap instruction comes from the \
-             adapter's own builder"
+             adapter's own builder, `PropAmm::swap_instruction`"
         )
     }
 
@@ -334,17 +365,17 @@ mod tests {
     use propamm_quote::QuoteError;
     use solana_account::Account;
 
-    const KEY: Pubkey = Pubkey::new_from_array([10; 32]);
-    const BASE_MINT: Pubkey = Pubkey::new_from_array([4; 32]);
-    const QUOTE_MINT: Pubkey = Pubkey::new_from_array([5; 32]);
-    const BASE_VAULT: Pubkey = Pubkey::new_from_array([6; 32]);
-    const QUOTE_VAULT: Pubkey = Pubkey::new_from_array([7; 32]);
+    pub(crate) const KEY: Pubkey = Pubkey::new_from_array([10; 32]);
+    pub(crate) const BASE_MINT: Pubkey = Pubkey::new_from_array([4; 32]);
+    pub(crate) const QUOTE_MINT: Pubkey = Pubkey::new_from_array([5; 32]);
+    pub(crate) const BASE_VAULT: Pubkey = Pubkey::new_from_array([6; 32]);
+    pub(crate) const QUOTE_VAULT: Pubkey = Pubkey::new_from_array([7; 32]);
 
     /// SOL(9)/USDC(6) at 150 USDC — see the scales in `propamm-quote`.
     const MID_E9: u128 = 150_000_000;
-    const QUOTE_SLOT: u64 = 1_000;
+    pub(crate) const QUOTE_SLOT: u64 = 1_000;
 
-    fn vault() -> Vault {
+    pub(crate) fn vault() -> Vault {
         Vault {
             owner: Pubkey::new_from_array([1; 32]),
             pricing_authority: Pubkey::new_from_array([2; 32]),
@@ -408,13 +439,13 @@ mod tests {
         map
     }
 
-    fn context(slot: u64) -> AmmContext {
+    pub(crate) fn context(slot: u64) -> AmmContext {
         let ctx = AmmContext::default();
         ctx.clock_ref.slot.store(slot, Ordering::Relaxed);
         ctx
     }
 
-    fn keyed(vault: &Vault) -> KeyedAccount {
+    pub(crate) fn keyed(vault: &Vault) -> KeyedAccount {
         KeyedAccount {
             key: KEY,
             account: vault_account(vault),
@@ -422,7 +453,7 @@ mod tests {
         }
     }
 
-    fn updated(vault: &Vault, slot: u64) -> PropAmm {
+    pub(crate) fn updated(vault: &Vault, slot: u64) -> PropAmm {
         let mut amm = PropAmm::from_keyed_account(&keyed(vault), &context(slot)).unwrap();
         amm.update(&accounts(vault)).unwrap();
         amm

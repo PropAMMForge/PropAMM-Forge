@@ -26,13 +26,20 @@
 //! treasuries cross into the interface's `AccountMap` field by field. Nothing is
 //! assembled by hand for the adapter, so a layout the adapter misreads cannot
 //! hide behind a fixture that misreads it the same way.
+//!
+//! The same holds the other way (T036): the program executes the instruction the
+//! adapter builds, `PropAmm::swap_instruction`, not one listed by hand in
+//! `tests/program`. A router gets the quote and the instruction from the adapter;
+//! parity covers both.
 
 #![forbid(unsafe_code)]
 
 use std::sync::atomic::Ordering;
 
 use anchor_lang::prelude::Pubkey as AnchorKey;
-use jupiter_amm_interface::{AccountMap, Amm, AmmContext, FeeMode, KeyedAccount, SwapMode};
+use jupiter_amm_interface::{
+    AccountMap, Amm, AmmContext, FeeMode, KeyedAccount, SwapMode, SwapParams,
+};
 use mollusk_svm::result::ProgramResult;
 use propamm_adapter::{quote_refusal, PropAmm};
 use propamm_vault::errors::VaultError;
@@ -148,6 +155,48 @@ fn legs(world: &World, side: SwapSide) -> [AnchorKey; 4] {
     }
 }
 
+/// Execute a swap with the instruction the adapter builds (FR-017, T036).
+///
+/// Not `World::swap`: that builder lists the accounts by hand in `tests/program`,
+/// and parity through it would say nothing about the instruction a router gets.
+/// Here every execution — the honoured quote, the refused `out + 1`, the refusal
+/// — goes through `PropAmm::swap_instruction`, so a wrong account, side or signer
+/// in the builder is a divergence like any other.
+fn execute(
+    world: &mut World,
+    venue: &Venue,
+    side: SwapSide,
+    amount_in: u64,
+    min_amount_out: u64,
+) -> Result<Outcome, String> {
+    let (source_mint, destination_mint) = mints(world, side);
+    let [source, destination, _, _] = legs(world, side);
+    let jupiter = AnchorKey::new_unique();
+    let hop = SwapParams {
+        swap_mode: SwapMode::ExactIn,
+        in_amount: amount_in,
+        // Not the bound: the builder takes that as an argument.
+        out_amount: 0,
+        source_mint,
+        destination_mint,
+        source_token_account: source,
+        destination_token_account: destination,
+        token_transfer_authority: world.trader,
+        user: world.trader,
+        payer: world.trader,
+        quote_mint_to_referrer: None,
+        jupiter_program_id: &jupiter,
+        missing_dynamic_accounts_as_default: false,
+    };
+    let instruction = venue
+        .amm
+        .swap_instruction(&hop, min_amount_out)
+        .map_err(|err| {
+            format!("{side:?} {amount_in}: the adapter built no instruction: {err:#}")
+        })?;
+    Ok(world.exec(&instruction))
+}
+
 /// What one comparison found, when the two sides agreed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
@@ -220,7 +269,7 @@ pub fn compare(
             // One unit more than the quote must not be honoured. Refusals leave no
             // trace in the world, so this does not disturb the execution below.
             if let Some(more) = out.checked_add(1) {
-                let outcome = world.swap(side, amount_in, more);
+                let outcome = execute(world, venue, side, amount_in, more)?;
                 expect_refusal(
                     &outcome,
                     VaultError::SlippageExceeded,
@@ -230,7 +279,7 @@ pub fn compare(
 
             let accounts = legs(world, side);
             let before = accounts.map(|key| world.balance(&key));
-            let outcome = world.swap(side, amount_in, out);
+            let outcome = execute(world, venue, side, amount_in, out)?;
             if !outcome.result.program_result.is_ok() {
                 return Err(format!(
                     "{side:?} {amount_in}: the adapter quoted {out}, the program refused with \
@@ -278,7 +327,7 @@ pub fn compare(
                 // checks before the math.
                 VaultError::VaultHalted
             };
-            let outcome = world.swap(side, amount_in, 0);
+            let outcome = execute(world, venue, side, amount_in, 0)?;
             expect_refusal(
                 &outcome,
                 expected,
