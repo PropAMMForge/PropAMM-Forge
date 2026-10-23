@@ -1,0 +1,28 @@
+[package]
+name = "propamm-router-twin"
+description = "A local twin of an aggregator router: registers venues, picks the best, assembles the transaction (FR-019)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# Everything here is on THIRD-generation solana crates — the generation of
+# anchor-lang and of the interface — so the adapter's `Instruction` goes into a
+# `Message` as is, the same way it does in the CLI.
+[dependencies]
+anchor-lang.workspace = true
+anyhow.workspace = true
+bincode.workspace = true
+jupiter-amm-interface.workspace = true
+propamm-adapter = { path = "../propamm-adapter" }
+solana-message.workspace = true
+solana-transaction.workspace = true
+thiserror.workspace = true
+
+# A real vault in the tests is built from the program's own account type, the
+# same way the adapter's tests build it. `solana-account` is the third
+# generation: the `Account` in the interface's `AccountMap`.
+[dev-dependencies]
+propamm-vault = { path = "../../programs/propamm-vault", features = ["no-entrypoint"] }
+solana-account = "3.4"

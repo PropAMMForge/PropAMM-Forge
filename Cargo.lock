@@ -2867,6 +2867,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "propamm-router-twin"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "anyhow",
+ "bincode",
+ "jupiter-amm-interface",
+ "propamm-adapter",
+ "propamm-vault",
+ "solana-account 3.4.0",
+ "solana-message 3.1.0",
+ "solana-transaction 3.1.0",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "propamm-vault"
 version = "0.1.0"
 dependencies = [
