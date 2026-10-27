@@ -24,8 +24,9 @@
 //! The interface answers with a closed `Swap` enum, and the vault program has no
 //! variant until Jupiter lists it (T034). Every venue of the twin builds its own
 //! instruction through [`Venue::swap_instruction`] — for the vault that is
-//! [`PropAmm::swap_instruction`] (T036), for the rival (T038) its own builder.
-//! After a listing the trait becomes a thin wrapper over the interface method.
+//! [`PropAmm::swap_instruction`] (T036), for the rival ([`rival::Rival`], T038)
+//! its own builder. After a listing the trait becomes a thin wrapper over the
+//! interface method.
 //!
 //! # The transaction
 //!
@@ -36,6 +37,8 @@
 //! are T039.
 
 #![forbid(unsafe_code)]
+
+pub mod rival;
 
 use anchor_lang::prelude::Pubkey;
 use anchor_lang::solana_program::instruction::Instruction;
@@ -807,6 +810,60 @@ mod tests {
         let twin = with_vault(out);
         let route = twin.route(&sell(ONE_SOL, 0), &TRADER).unwrap();
         assert_eq!(route.venue, Pubkey::new_from_array([2; 32]));
+        assert_eq!(route.candidates[0].outcome, Ok(out));
+    }
+
+    /// The vault under test and the public pool of SC-005 holding `sol` / `usdc`.
+    fn against_the_pool(sol: u64, usdc: u64) -> Router {
+        use crate::rival::{Pool, Rival, RIVAL_FEE_BPS};
+        let mut twin = Router::new(VAULT_KEY);
+        twin.set_slot(QUOTE_SLOT);
+        let keyed = KeyedAccount {
+            key: VAULT_KEY,
+            account: vault_account(&vault()),
+            params: None,
+        };
+        let amm = PropAmm::from_keyed_account(&keyed, twin.context()).unwrap();
+        twin.register(Box::new(amm)).unwrap();
+        let (sol_reserve, usdc_reserve) = (
+            Pubkey::new_from_array([31; 32]),
+            Pubkey::new_from_array([32; 32]),
+        );
+        let pool = Rival::new(Pool {
+            key: Pubkey::new_from_array([30; 32]),
+            mints: [BASE_MINT, QUOTE_MINT],
+            reserves: [sol_reserve, usdc_reserve],
+            fee_bps: RIVAL_FEE_BPS,
+        })
+        .unwrap();
+        twin.register(Box::new(pool)).unwrap();
+
+        let mut map = vault_accounts();
+        map.insert(sol_reserve, token_account(&BASE_MINT, sol));
+        map.insert(usdc_reserve, token_account(&QUOTE_MINT, usdc));
+        let failed = twin.update(&map);
+        assert!(failed.is_empty(), "{failed:?}");
+        twin
+    }
+
+    #[test]
+    fn the_vault_beats_the_public_pool_at_the_same_mid_and_loses_to_a_better_one() {
+        let out = vault_out();
+        // 1 000 SOL / 150 000 USDC: the vault's mid, 30 bps fee against its 5 bps.
+        let same_mid = against_the_pool(1_000 * ONE_SOL, 150_000_000_000);
+        let route = same_mid.route(&sell(ONE_SOL, 30), &TRADER).unwrap();
+        assert_eq!(route.venue, VAULT_KEY);
+        let rival_out = route.candidates[1].outcome.clone().unwrap();
+        assert!(rival_out < out, "{rival_out} vs {out}");
+
+        // The pool's mid 1% above: its fee and impact no longer cover the gap.
+        let richer = against_the_pool(1_000 * ONE_SOL, 151_500_000_000);
+        let route = richer.route(&sell(ONE_SOL, 30), &TRADER).unwrap();
+        assert_eq!(route.venue, Pubkey::new_from_array([30; 32]));
+        assert_eq!(
+            route.instructions[0].program_id,
+            crate::rival::RIVAL_PROGRAM_ID
+        );
         assert_eq!(route.candidates[0].outcome, Ok(out));
     }
 
